@@ -46,9 +46,8 @@ def mols(p, y, L=1):
     ## The Gram-Schmidt method was implemented in a modified way, as shown in Rice, JR(1966)
         for r in range(m):
             qs[:, [m], :] = qs[:, [m], :] - np.sum(q[:, [r], :]*qs[:, [m], :], axis=0)/(np.sum(q[:, [r], :]*q[:, [r], :], axis=0)+1e-6)*q[:, [r], :]
-        gs[:, m] = np.sum(y*np.squeeze(qs[:, m, :]), axis=0)/(np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)+1e-6)
-        for r in  range(m):
             A[r, m, :] = np.sum(q[:, [r], :]*p[:, [m], :], axis=0)/(np.sum(q[:, [r], :]*q[:, [r], :], axis=0)+1e-6) 
+        gs[:, m] = np.sum(y*np.squeeze(qs[:, m, :]), axis=0)/(np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)+1e-6)
         A[m, m, :] = 1.0
         q[:, m, :] = qs[:, m, :]
         g[:, m] = gs[:, m]
