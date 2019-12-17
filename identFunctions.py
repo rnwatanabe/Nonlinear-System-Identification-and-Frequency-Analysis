@@ -8,6 +8,7 @@ Created on Sat Mar 23 11:59:36 2019
 
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy
 
 def ls(p, y):
     py = (p.T).dot(y)
@@ -38,18 +39,19 @@ def mols(p, y, L=1):
     gs = np.zeros((L, M))
     beta = np.zeros((M, L))
 
-    for j in range(L):
-        for m in range(M):
-        ## The Gram-Schmidt method was implemented in a modified way, as shown in Rice, JR(1966)
-            qs[:, m, j] = p[:, m, j]
-            for r in range(m):
-                qs[:, [m], j] = qs[:, [m], j] - (q[:, [r], j].T@qs[:, [m], j])/(q[:, [r], j].T@q[:, [r], j]+1e-6)*q[:, [r], j]
-            gs[j, m] = (y[:, [j]].T@qs[:, [m], j])/(qs[:, [m], j].T@qs[:, [m], j]+1e-6)
-            for r in  range(m):
-                A[r, m, j] = (q[:, [r], j].T@p[:, [m], j])/(q[:, [r], j].T@q[:, [r], j]+1e-6)      
-            A[m, m, j] = 1
-            q[:, m, j] = qs[:, m, j]
-            g[j, m] = gs[j, m]
+
+    qs = np.copy(p)
+    
+    for m in range(M):
+    ## The Gram-Schmidt method was implemented in a modified way, as shown in Rice, JR(1966)
+        for r in range(m):
+            qs[:, [m], :] = qs[:, [m], :] - np.sum(q[:, [r], :]*qs[:, [m], :], axis=0)/(np.sum(q[:, [r], :]*q[:, [r], :], axis=0)+1e-6)*q[:, [r], :]
+        gs[:, m] = np.sum(y*np.squeeze(qs[:, m, :]), axis=0)/(np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)+1e-6)
+        for r in  range(m):
+            A[r, m, :] = np.sum(q[:, [r], :]*p[:, [m], :], axis=0)/(np.sum(q[:, [r], :]*q[:, [r], :], axis=0)+1e-6) 
+        A[m, m, :] = 1.0
+        q[:, m, :] = qs[:, m, :]
+        g[:, m] = gs[:, m]
 
     for j in range(L):
         if M > 1:
@@ -106,7 +108,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
           l: vector of integers, indices of the chosen terms
           M0: number of chosen terms
     '''
-    import numpy as np
+    
 
     if np.ndim(p) == 2:
         pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1))
@@ -128,28 +130,26 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
     L = p.shape[2]
     gs = np.zeros((L, M))
     ERR = np.zeros((L, M))
-    qs = np.zeros_like(p)
-
-    for j in range(L):
-        sigma = y[:, [j]].T@y[:, [j]]
-        for m in range(M):
-            if np.all(m!=l):
-                ## The Gram-Schmidt method was implemented in a modified way,
-                ## as shown in Rice, JR(1966)
-                qs[:, m, j] = p[:, m, j]
-                for r in range(s):
-                    qs[:, [m], j] = qs[:, [m], j] - ((q[:, [r], j].T@qs[:, [m], j])
-                                                     /(q[:, [r], j].T@q[:, [r], j])*q[:, [r], j])
-                gs[j, m] = (y[:, [j]].T@qs[:, [m], j])/(qs[:, [m], j].T@qs[:, [m], j]+1e-6)
-                
-                ERR[j, m] = gs[j, m]**2*(qs[:, [m], j].T@qs[:, [m], j])/sigma
-            else:
-                ERR[j, m] = 0
+    qs = np.copy(p)
+    
+    sigma = np.sum(y**2, axis=0)
+            
+    for m in range(M):
+        if np.all(m!=l):
+            ## The Gram-Schmidt method was implemented in a modified way,
+            ## as shown in Rice, JR(1966)                
+            for r in range(s):
+                qs[:, [m], :] = qs[:, [m], :] - (np.sum(q[:, [r], :]*qs[:, [m], :], axis=0, keepdims=True)
+                                                 /np.sum(q[:, [r], :]*q[:, [r], :], axis=0, keepdims=True)*q[:, [r], :])
+            gs[:, m] = (np.sum(y*np.squeeze(qs[:, m, :]), axis=0)/(np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)+1e-6))
+            
+            ERR[:, m] = (gs[:, m]**2*np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)/sigma)
+            
 
 
     ERR_m = np.mean(ERR, axis=0)
         
-    l[s] = np.nonzero(ERR_m==np.nanmax(ERR_m))[0][0]
+    l[s] = np.where(ERR_m==np.nanmax(ERR_m))[0][0]
     err[s] = ERR_m[int(l[s])]
     for j in range(L):
         for r in  range(s):
@@ -280,23 +280,28 @@ def validation(u, y, D, beta, ustring='u', ystring='y'):
     plt.plot(lags, phi_uxi)
     plt.plot(lags, np.mean(phi_uxi, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{' + ustring + '\\xi_'+ ystring+'}$')
+    plt.xlim(-3*maxLag, 3*maxLag)
     plt.ylim(-1, 1)
     plt.subplot(5, 1, 3)
     plt.plot(lags1, phi_xixiu)
     plt.plot(lags1, np.mean(phi_xixiu, axis=1), '-k', lags1, CB1[0]*np.ones_like(lags1), '--b', lags1, CB1[1]*np.ones_like(lags1), '--b')
     plt.ylabel(r'$\Phi_{\xi_' + ystring + '(\\xi_' + ystring + ustring + ')}$')
+    plt.xlim(0, 3*maxLag)
     plt.ylim(-1, 1)
     plt.subplot(5, 1, 4)
     plt.plot(lags, phi_u2xi)
     plt.plot(lags, np.mean(phi_u2xi, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring +'}$')
     plt.ylim(-1, 1)
+    plt.xlim(-3*maxLag, 3*maxLag)
     plt.subplot(5, 1, 5)
     plt.plot(lags, phi_u2xi2)
     plt.plot(lags, np.mean(phi_u2xi2, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring + '^2}$')
     plt.ylim(-1, 1)
-
+    plt.xlim(-3*maxLag, 3*maxLag)
+    plt.subplots_adjust(hspace=0.5)
+    plt.show()
 def validationTimeSeries(xi, maxLag):
     '''
      Runs the tests form Eq. 5.13 in Billings (2013).
