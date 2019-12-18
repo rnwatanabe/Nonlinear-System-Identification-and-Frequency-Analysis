@@ -150,12 +150,12 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
         
     l[s] = np.where(ERR_m==np.nanmax(ERR_m))[0][0]
     err[s] = ERR_m[int(l[s])]
-    for j in range(L):
-        for r in  range(s):
-            A[r, s, j] = (q[:, [r], j].T@p[:, [int(l[s])], j])/(q[:, [r], j].T@q[:, [r], j])    
-        A[s, s, j] = 1
-        q[:, s, j] = qs[:, int(l[s]), j]
-        g[j, s] = gs[j, int(l[s])]
+    
+    r = np.arange(s)
+    A[r, s, :] = np.sum(q[:, r, :]*p[:, [int(l[s])], :], axis=0)/(np.sum(q[:, r, :]*q[:, r, :], axis=0))
+    A[s, s, :] = 1.0
+    q[:, s, :] = qs[:, int(l[s]), :]
+    g[:, s] = gs[:, int(l[s])]
 
     ESR = ESR - err[s]   
 
@@ -220,7 +220,7 @@ def crosscorr(x,y, alpha = 0.05):
     lags = lags - N//2
     return phi, lags, CB
 
-def validation(u, y, D, beta, ustring='u', ystring='y'):
+def validation(u, xi, D, ustring='u', ystring='y'):
     '''
      Runs the tests form Eq. 5.13 in Billings (2013).
      
@@ -232,11 +232,9 @@ def validation(u, y, D, beta, ustring='u', ystring='y'):
      
         u: matrix, each column is an input signal for each trial used in the identfication.
         
-        y: matrix, each column is an output signal for each trial used in the identfication.
+        xi: matrix, each column is the residual signal from the identification for each trial used in the identfication.
      
         D: vector of strings, structure of the model
-        
-        beta: vector of floats: coefficients of each term of the vector D
      
         ustring: string, indicates the character that represents the input signal
         
@@ -245,13 +243,10 @@ def validation(u, y, D, beta, ustring='u', ystring='y'):
     import numpy as np
     import matplotlib.pyplot as plt
     
+    
     trials = u.shape[1]  
     
     maxLag = findMaxLagFromStruct(D)
-    
-    xi = np.zeros((u.shape[0] - maxLag, trials))
-    for i in range(trials):
-        _, xi[:,[i]], _ = osaWithStruct(u[:,[i]], y[:,[i]], beta, D, degree=[], ustring=ustring, ystring=ystring)
     
     u = u[maxLag:,:]
     phi_xixi = np.zeros((u.shape[0], u.shape[1]))
@@ -272,7 +267,7 @@ def validation(u, y, D, beta, ustring='u', ystring='y'):
     plt.subplot(5, 1, 1)
     plt.plot(lags, phi_xixi)
     plt.plot(lags, np.mean(phi_xixi, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
-    plt.ylabel(r'$\Phi_{\xi_'+ystring +'\\xi_'+ ystring +'}$')
+    plt.ylabel(r'$\Phi_{\xi_'+ ystring +'\\xi_'+ ystring +'}$')
     plt.xlim(-3*maxLag, 3*maxLag)
     plt.ylim(-1, 1)
     plt.subplot(5, 1, 2)        
@@ -599,30 +594,38 @@ def executeMFrols(p,y, pho, D, L=1, supress = False):
     beta = betatemp
     return beta
 
+def matmulStacked(a, b):
+    
+    m = np.moveaxis(np.matmul(np.moveaxis(a, -1, 0), np.moveaxis(b, -1, 0)), 0, -1)
+    return m
+
 def RLS(p, y, lamb, Nmax=100000, supress=False):
     
     invLambda = 1.0/lamb
     
     beta = np.zeros((p.shape[1],p.shape[2]))
-    for j in range(p.shape[2]):
-        P = 1e6*np.eye(p.shape[1])
+    
+    P = np.repeat(1e6*np.eye(p.shape[1]).reshape(p.shape[1], -1, 1), p.shape[2], axis=2)
+    
+    e_beta = np.zeros((Nmax, p.shape[2]))
+    betahist = np.zeros((beta.shape[0], Nmax, p.shape[2]))
+    betaant = np.copy(beta)
+    
+    i = 0
+    for N in range(Nmax):
+        P = invLambda*(P - (invLambda*matmulStacked(matmulStacked(matmulStacked(P, np.moveaxis(p[[i], :, :], 0, 1)), p[[i],:,:]),P))/
+                       (1+invLambda*matmulStacked(matmulStacked(p[[i], :, :],P), np.moveaxis(p[[i], :, :], 0, 1))))
         
-        e_beta = np.zeros((Nmax,1))
-        betahist = np.zeros((beta.shape[0], Nmax))
-        betaant = beta[:,[j]]
-        i = 0
         
-        for N in range(Nmax):
-            P = invLambda*(P - (invLambda*P@p[[i],:,j].T@p[[i],:,j]@P)/(1+invLambda*p[[i],:,j]@P@p[[i],:,j].T))
-            beta[:,[j]] = beta[:, [j]] + P@p[[i],:,j].T*(y[i,[j]] - p[[i],:,j]@beta[:,[j]])
-            e_beta[N] = (beta[:,[j]] - betaant).T@(beta[:,[j]] - betaant)
-            betahist[:,[N]] = beta[:,[j]]
-            betaant = 1*beta[:,[j]]
-            i = i + 1
-            if (i > p.shape[0]-1):
-                i = 0
-                if (not supress): print(N, e_beta[N-2])
-    beta = np.mean(beta, axis=1)    
+        beta = beta + np.squeeze(matmulStacked(P, np.moveaxis(p[[i],:,:], 0, 1))*(y[i, :] - matmulStacked(p[[i],:,:],  np.moveaxis(beta.reshape(beta.shape[0], beta.shape[1], 1), 1, 2))))
+        e_beta[N,:] = np.sum((beta - betaant)**2, axis=0)
+        betahist[:,N,:] = beta
+        betaant = np.copy(beta)
+        i = i + 1
+        if (i > p.shape[0]-1):
+            i = 0
+            if (not supress): print(N, np.mean(e_beta[N-2,:]))
+    beta = np.mean(beta, axis=1, keepdims=True)    
     return beta, e_beta, betahist
 
 def whitenSignalIIR(b, a, x):
@@ -698,16 +701,16 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
                 
         for i in range(y.shape[1]):
             n[maxLag:,[i]] = y[maxLag:,[i]] - pn[:,:,i]@betan
-            
-    print('\n')        
-            
         
+        if not supress:
+            for i in range(len(D)):
+                if betan[i,0] != 0: print(D[i], betan[i,0])
     return betan, pn, n, D
 
 def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                   ystring='y', nstring='n', delay=0, degree=1, L=5,
                   constantTerm=True, pho = 0.01, supress=False, 
-                  method='mfrols', elsMethod='mols'):
+                  method='mfrols', elsMethod='mols', elsMaxIter=10):
     
     if len(y.shape) == 1:
         y = y.reshape(-1,1)
@@ -723,33 +726,34 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
             pNew = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
             p = np.concatenate((p, pNew), axis=2)
     
-    maxLagn = max(maxLagu, maxLagy)
-    beta_uy = executeMFrols(p, y[maxLagn:,:], pho, D, L=L, supress=supress)
+   
+    beta_uy = executeMFrols(p, y[max(maxLagu, maxLagy):,:], pho, D, L=L, supress=supress)
+    
+    if elsMethod != 'mfrols':
+       indicesToRemove = []
+       for i in range(len(beta_uy)):
+           if beta_uy[i] == 0:
+               indicesToRemove.append(i)
+       D = np.delete(D, indicesToRemove)
+    
+    maxLagn = findMaxLagFromStruct(D)
     
     ny = np.zeros((u.shape[0]-maxLagn, u.shape[1]))
-    for i in range(y.shape[1]):
-        _, ny[:, [i]] = osa(u[:,[i]], y[:,[i]], beta_uy, degree=degree,
-                          maxLagu=maxLagu, maxLagy=maxLagy,
-                          delay = delay, constantTerm = constantTerm)
+    
        
     _, Dn = pNoiseMatrix(u[maxLagn:,[0]], y[maxLagn:,[0]], ny[:,[0]], maxLagu, maxLagy,
                          maxLagn, ustring=ustring, ystring=ystring, 
                          nstring=nstring, delay=1, degree=degree,
-                         constantTerm=constantTerm)
+                         constantTerm=False)
       
-    if elsMethod != 'mfrols':
-        indicesToRemove = []
-        for i in range(len(beta_uy)):
-            if beta_uy[i] == 0:
-                indicesToRemove.append(i)
-        D = np.delete(D, indicesToRemove)
+    
     
     Dels = np.hstack((D, Dn))
     beta_uy_ELS, _, nELS, _ = elsWithStruct(u[maxLagn:,:], y[maxLagn:,:], ny, Dels,
-                                            maxIter=4, ustring=ustring, 
+                                            maxIter=elsMaxIter, ustring=ustring, 
                                             ystring=ystring, nstring=nstring, 
                                             supress=supress, pho=pho, L=L,
-                                            method=elsMethod)
+                                            method=elsMethod, Nmax=p.shape[0])
     
     beta_uy = beta_uy_ELS[0:len(D)]
     
