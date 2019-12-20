@@ -610,14 +610,15 @@ def executeMFrols(p,y, pho, D, L=1, supress = False):
 
 def matmulStacked(a, b):
     
-    m = np.moveaxis(np.matmul(np.moveaxis(a, -1, 0), np.moveaxis(b, -1, 0)), 0, -1)
+    m = np.transpose(np.matmul(np.transpose(a, (2, 0, 1)), np.transpose(b, (2, 0, 1))), (1, 2, 0))
     return m
 
 def RLS(p, y, lamb, Nmax=100000, supress=False):
-    
+    # import time
     invLambda = 1.0/lamb
     
-    beta = np.zeros((p.shape[1],p.shape[2]))
+    
+    beta = np.zeros((p.shape[1], p.shape[2]))
     
     P = np.repeat(1e6*np.eye(p.shape[1]).reshape(p.shape[1], -1, 1), p.shape[2], axis=2)
     
@@ -627,12 +628,12 @@ def RLS(p, y, lamb, Nmax=100000, supress=False):
     
     i = 0
     for N in range(Nmax):
+        # start = time.process_time()
+        P = invLambda*(P - (invLambda*matmulStacked(matmulStacked(matmulStacked(P, np.transpose(p[[i], :, :], (1, 0, 2))), p[[i],:,:]), P))/
+                       (1 + invLambda*matmulStacked(matmulStacked(p[[i], :, :],P), np.transpose(p[[i], :, :], (1, 0, 2)))))
+        # print('P matrix time', time.process_time() - start, 's')
         
-        P = invLambda*(P - (invLambda*matmulStacked(matmulStacked(matmulStacked(P, np.moveaxis(p[[i], :, :], 0, 1)), p[[i],:,:]),P))/
-                       (1+invLambda*matmulStacked(matmulStacked(p[[i], :, :],P), np.moveaxis(p[[i], :, :], 0, 1))))
-        
-        
-        beta = beta + np.squeeze(matmulStacked(P, np.moveaxis(p[[i],:,:], 0, 1))*(y[i, :] - matmulStacked(p[[i],:,:],  np.moveaxis(beta.reshape(beta.shape[0], beta.shape[1], 1), 1, 2))), axis=2)
+        beta = beta + np.squeeze(matmulStacked(P, np.transpose(p[[i],:,:], (1,0,2)))*(y[i, :] - matmulStacked(p[[i],:,:],  np.transpose(beta.reshape(beta.shape[0], beta.shape[1], 1), (0,2,1)))), axis=1)
         e_beta[N,:] = np.sum((beta - betaant)**2, axis=0)
         betahist[:,N,:] = beta
         betaant = np.copy(beta)
@@ -640,8 +641,8 @@ def RLS(p, y, lamb, Nmax=100000, supress=False):
         if (i > p.shape[0]-1):
             i = 0
             if (not supress): print(N, np.mean(e_beta[N-2,:]))
-    beta = np.mean(beta, axis=1, keepdims=True)    
-    return beta, e_beta, betahist
+    beta_m = np.mean(beta, axis=1, keepdims=True)    
+    return beta_m, e_beta, betahist, beta
     
 
     
