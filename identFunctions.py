@@ -47,7 +47,7 @@ def mols(p, y, L=1):
         for r in range(m):
             qs[:, [m], :] = qs[:, [m], :] - np.sum(q[:, [r], :]*qs[:, [m], :], axis=0)/(np.sum(q[:, [r], :]*q[:, [r], :], axis=0)+1e-6)*q[:, [r], :]
             A[r, m, :] = np.sum(q[:, [r], :]*p[:, [m], :], axis=0)/(np.sum(q[:, [r], :]*q[:, [r], :], axis=0)+1e-6) 
-        gs[:, m] = np.sum(y*np.squeeze(qs[:, m, :]), axis=0)/(np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)+1e-6)
+        gs[:, [m]] = (np.sum(y*qs[:, m, :], axis=0, keepdims=True)/(np.sum(qs[:, m, :]*qs[:, m, :], axis=0, keepdims=True)+1e-6)).T
         A[m, m, :] = 1.0
         q[:, m, :] = qs[:, m, :]
         g[:, m] = gs[:, m]
@@ -58,8 +58,8 @@ def mols(p, y, L=1):
         else:
             beta[:, j] = (np.squeeze(A)**-1)*g[j, :]
 
-    beta = np.mean(beta, axis=1, keepdims=True)
-    return beta
+    beta_m = np.mean(beta, axis=1, keepdims=True)
+    return beta_m, beta
 
 def whitenMatrix(X):
     X_c = X - np.mean(X, 0, keepdims=True)
@@ -140,7 +140,8 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
             for r in range(s):
                 qs[:, [m], :] = qs[:, [m], :] - (np.sum(q[:, [r], :]*qs[:, [m], :], axis=0, keepdims=True)
                                                  /np.sum(q[:, [r], :]*q[:, [r], :], axis=0, keepdims=True)*q[:, [r], :])
-            gs[:, m] = (np.sum(y*np.squeeze(qs[:, m, :]), axis=0)/(np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)+1e-6))
+            
+            gs[:, [m]] = (np.sum(y*qs[:, m, :], axis=0, keepdims=True)/(np.sum(qs[:, m, :]*qs[:, m, :], axis=0, keepdims=True) + 1e-6)).T
             
             ERR[:, m] = (gs[:, m]**2*np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)/sigma)
             
@@ -230,7 +231,7 @@ def validation(u, xi, D, ustring='u', ystring='y'):
      
        Inputs:
      
-        u: matrix, each column is an input signal for each trial used in the identfication.
+        u: matrix, each column is an input signal for each trial used in the ifyMfication.
         
         xi: matrix, each column is the residual signal from the identification for each trial used in the identfication.
      
@@ -249,6 +250,8 @@ def validation(u, xi, D, ustring='u', ystring='y'):
     maxLag = findMaxLagFromStruct(D)
     
     u = u[maxLag:,:]
+    u = u - np.mean(u, axis=0, keepdims=True)
+    xi = xi - np.mean(xi, axis=0, keepdims=True)
     phi_xixi = np.zeros((u.shape[0], u.shape[1]))
     phi_uxi = np.zeros((u.shape[0], u.shape[1]))
     phi_xixiu = np.zeros((u.shape[0]-1, u.shape[1]))
@@ -454,6 +457,17 @@ def findMaxLagFromStruct(D):
                 
     return maxLag
 
+def findDegreeFromStruct(D):
+    
+    maxDegree = 0
+    for i in range(len(D)):
+        if D[i] != '1':
+            degree = D[i].count(')') 
+            if degree > maxDegree: maxDegree = degree
+            
+                
+    return maxDegree
+
 def pMatrixFromStruct(u, y, n, D, ustring = 'u', 
                       ystring = 'y', nstring = 'n'):
     
@@ -530,11 +544,11 @@ def pNoiseMatrix(u,y,n, maxLagu, maxLagy, maxLagNoise,
                 indToRemove = np.vstack((indToRemove, j))
         multindD = np.delete(multindD, indToRemove)
         if i == 1:
-            p, _, _ = pMatrixFromStruct(u, y, n, multindD, ustring = ustring, 
+            p, _, _ = pMatrixFromStruct(u, y, n, multindD, ustring=ustring, 
                                         ystring = ystring)
             D = multindD
         else:
-            pNew, _, _ = pMatrixFromStruct(u, y, n, multindD, ustring = ustring, 
+            pNew, _, _ = pMatrixFromStruct(u, y, n, multindD, ustring=ustring, 
                                            ystring = ystring)
             p = np.hstack((p, pNew))
             D = np.hstack((D, multindD))
@@ -613,11 +627,12 @@ def RLS(p, y, lamb, Nmax=100000, supress=False):
     
     i = 0
     for N in range(Nmax):
+        
         P = invLambda*(P - (invLambda*matmulStacked(matmulStacked(matmulStacked(P, np.moveaxis(p[[i], :, :], 0, 1)), p[[i],:,:]),P))/
                        (1+invLambda*matmulStacked(matmulStacked(p[[i], :, :],P), np.moveaxis(p[[i], :, :], 0, 1))))
         
         
-        beta = beta + np.squeeze(matmulStacked(P, np.moveaxis(p[[i],:,:], 0, 1))*(y[i, :] - matmulStacked(p[[i],:,:],  np.moveaxis(beta.reshape(beta.shape[0], beta.shape[1], 1), 1, 2))))
+        beta = beta + np.squeeze(matmulStacked(P, np.moveaxis(p[[i],:,:], 0, 1))*(y[i, :] - matmulStacked(p[[i],:,:],  np.moveaxis(beta.reshape(beta.shape[0], beta.shape[1], 1), 1, 2))), axis=2)
         e_beta[N,:] = np.sum((beta - betaant)**2, axis=0)
         betahist[:,N,:] = beta
         betaant = np.copy(beta)
@@ -627,6 +642,9 @@ def RLS(p, y, lamb, Nmax=100000, supress=False):
             if (not supress): print(N, np.mean(e_beta[N-2,:]))
     beta = np.mean(beta, axis=1, keepdims=True)    
     return beta, e_beta, betahist
+    
+
+    
 
 def whitenSignalIIR(b, a, x):
     xw = x
@@ -671,7 +689,9 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
           
     
     for k in range(maxIter):
-        if not supress: print('ELS iteration -', k)
+        if not supress: 
+            print('ELS iteration -', k)
+            print('Mounting matrix of features with noise')
         for i in range(y.shape[1]):
             pNew, Dn, maxLag = pMatrixFromStruct(u[:,[i]], y[:,[i]], 
                                                  n[:,[i]], D, 
@@ -691,16 +711,24 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
         else:
             supressMessage = True
         if method=='RLS':
-                betan, e_betan, _ = RLS(pn, y[maxLag:,:], lamb=lamb, Nmax=Nmax, 
-                                        supress=supressMessage)
+                if not supress: 
+                    print('Executing RLS method')
+                betan, e_betan, _, betani = RLS(pn, y[maxLag:,:], lamb=lamb, Nmax=Nmax, 
+                                                supress=supressMessage)
         if method=='mfrols':
+                if not supress: 
+                    print('Executing MFROLS method')
                 betan = executeMFrols(pn, y[maxLag:,:], pho=pho, D=Dn, 
                                       L=L, supress=supressMessage)
         if method=='mols':                
-                betan = mols(pn, y[maxLag:,:], L=L)
+                if not supress: 
+                    print('Executing MOLS method')
+                betan, betani = mols(pn, y[maxLag:,:], L=L)
                 
         for i in range(y.shape[1]):
-            n[maxLag:,[i]] = y[maxLag:,[i]] - pn[:,:,i]@betan
+            if not supress: 
+                    print('Computing residue of the identification')
+            n[maxLag:,[i]] = y[maxLag:,[i]] - pn[:,:,i]@betani[:,[i]]
         
         if not supress:
             for i in range(len(D)):
@@ -737,6 +765,7 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
        D = np.delete(D, indicesToRemove)
     
     maxLagn = findMaxLagFromStruct(D)
+    degree = findDegreeFromStruct(D)
     
     ny = np.zeros((u.shape[0]-maxLagn, u.shape[1]))
     
