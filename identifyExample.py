@@ -48,6 +48,10 @@ ey = 0.2*np.random.randn(N, 1)
 
 t, u, y = system(u, Fs, noiseSTD=0, eu=eu, ey=ey)
 
+u = ident.reshapeyvector(u, L=4)
+y = ident.reshapeyvector(y, L=4)
+t = ident.reshapeyvector(t.reshape(-1,1), L=4)
+
 #t = t[1000:]
 #u = u[1000:]
 #y = y[1000:]
@@ -65,7 +69,7 @@ print('system identification')
 beta_uy, n_uy, Duy = ident.identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                                          ystring='y', nstring='n', delay=1,
                                          degree=order, L=20, constantTerm=True,
-                                         pho = 0.005, supress=False)
+                                         pho = 0.005, supress=False, elsMethod='RLS')
 #%%
 beta_yu, n_yu, Dyu = ident.identifyModel(y, u, maxLagy, maxLagu, ustring='y',
                                          ystring='u', nstring='m', delay=1,
@@ -142,7 +146,7 @@ f_inputMax = Fs/2
 maxDegree = 2
 NPDCuy, NPDCyu, f, NPDCuyn, NPDCyun, NPDCuyLinear, NPDCyuLinear, NPDCuynLinear, NPDCyunLinear = GFRF.NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
                                                                                                           Hnuy, Hnyu, f_inputMin, f_inputMax, maxOrder=maxDegree, 
-                                                                                                          N=100, ustring='u', ystring='y')
+                                                                                                          L=100, ustring='u', ystring='y')
                                                                                          
 plt.figure()
 plt.plot(f, np.abs(NPDCuyn))

@@ -213,10 +213,17 @@ def crosscorr(x,y, alpha = 0.05):
     
     x = np.reshape(x,(x.shape[0]))
     y = np.reshape(y,(y.shape[0]))
+    xr = np.copy(x)
+    yr = np.copy(y)
+    np.random.shuffle(xr)
+    np.random.shuffle(yr)
     c = np.correlate(x - np.mean(x), y - np.mean(y), mode='same')/len(x)
     phi = c/(np.std(x-np.mean(x))*np.std(y-np.mean(y)))
+    cr = np.correlate(xr - np.mean(xr), yr - np.mean(yr), mode='same')/len(xr)
+    phir = cr/(np.std(xr-np.mean(xr))*np.std(yr-np.mean(yr)))
     N = len(x)
-    CB = np.array([-norm.ppf(alpha/2)/np.sqrt(N), norm.ppf(alpha/2,0,1)/np.sqrt(N)])
+    # CB = np.array([-norm.ppf(alpha/2)/np.sqrt(N), norm.ppf(alpha/2,0,1)/np.sqrt(N)])
+    CB = np.array([-np.max(np.abs(phir)), np.max(np.abs(phir))])
     lags = np.arange(N)
     lags = lags - N//2
     return phi, lags, CB
@@ -277,7 +284,7 @@ def validation(u, xi, D, ustring='u', ystring='y'):
     plt.plot(lags, phi_uxi)
     plt.plot(lags, np.mean(phi_uxi, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{' + ustring + '\\xi_'+ ystring+'}$')
-    plt.xlim(-3*maxLag, 3*maxLag)
+    plt.xlim(-3*maxLag, -1)
     plt.ylim(-1, 1)
     plt.subplot(5, 1, 3)
     plt.plot(lags1, phi_xixiu)
@@ -614,38 +621,39 @@ def matmulStacked(a, b):
     return m
 
 def RLS(p, y, lamb, Nmax=100000, supress=False):
-    # import time
+    
     invLambda = 1.0/lamb
     
+    p = p.transpose((2, 0, 1))
+    beta = np.zeros((p.shape[0], p.shape[2], 1))
+    y = y.T
+    y = y.reshape(y.shape[0],y.shape[1],1)
     
-    beta = np.zeros((p.shape[1], p.shape[2]))
+    P = np.repeat(1e6*np.eye(p.shape[2]).reshape(p.shape[2], p.shape[2], 1).transpose((2,0,1)), p.shape[0], axis=0)
     
-    P = np.repeat(1e6*np.eye(p.shape[1]).reshape(p.shape[1], -1, 1), p.shape[2], axis=2)
-    
-    e_beta = np.zeros((Nmax, p.shape[2]))
-    betahist = np.zeros((beta.shape[0], Nmax, p.shape[2]))
+    e_beta = np.zeros((p.shape[0], Nmax))
+    betahist = np.zeros((beta.shape[0], beta.shape[1], 1, Nmax))
     betaant = np.copy(beta)
+    
+    
     
     i = 0
     for N in range(Nmax):
-        # start = time.process_time()
-        P = invLambda*(P - (invLambda*matmulStacked(matmulStacked(matmulStacked(P, np.transpose(p[[i], :, :], (1, 0, 2))), p[[i],:,:]), P))/
-                       (1 + invLambda*matmulStacked(matmulStacked(p[[i], :, :],P), np.transpose(p[[i], :, :], (1, 0, 2)))))
-        # print('P matrix time', time.process_time() - start, 's')
         
-        beta = beta + np.squeeze(matmulStacked(P, np.transpose(p[[i],:,:], (1,0,2)))*(y[i, :] - matmulStacked(p[[i],:,:],  np.transpose(beta.reshape(beta.shape[0], beta.shape[1], 1), (0,2,1)))), axis=1)
-        e_beta[N,:] = np.sum((beta - betaant)**2, axis=0)
-        betahist[:,N,:] = beta
+        P = invLambda*(P - (invLambda*np.matmul(np.matmul(np.matmul(P, np.transpose(p[:,[i],:], (0, 2, 1))), p[:,[i],:]), P))/
+                       (1 + invLambda*np.matmul(np.matmul(p[:,[i],:], P), np.transpose(p[:,[i],:], (0, 2, 1)))))
+        
+        beta = beta + np.matmul(P, np.transpose(p[:,[i],:], (0,2,1)))*(y[:, [i],:] - np.matmul(p[:,[i],:], beta))
+        e_beta[:, [N]] = np.sum((beta - betaant)**2, axis=1)
+        betahist[:,:,:,N] = beta
         betaant = np.copy(beta)
         i = i + 1
-        if (i > p.shape[0]-1):
+        if (i > p.shape[1]-1):
             i = 0
-            if (not supress): print(N, np.mean(e_beta[N-2,:]))
-    beta_m = np.mean(beta, axis=1, keepdims=True)    
+            if (not supress): print(N, np.mean(e_beta[:,N-2]))
+    beta = np.squeeze(beta.transpose((1, 2, 0)), axis=1)
+    beta_m = np.mean(beta, axis=1, keepdims=True)
     return beta_m, e_beta, betahist, beta
-    
-
-    
 
 def whitenSignalIIR(b, a, x):
     xw = x
@@ -725,10 +733,9 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
                 if not supress: 
                     print('Executing MOLS method')
                 betan, betani = mols(pn, y[maxLag:,:], L=L)
-                
-        for i in range(y.shape[1]):
-            if not supress: 
-                    print('Computing residue of the identification')
+        if not supress: 
+            print('Computing residue of the identification')        
+        for i in range(y.shape[1]):            
             n[maxLag:,[i]] = y[maxLag:,[i]] - pn[:,:,i]@betani[:,[i]]
         
         if not supress:
