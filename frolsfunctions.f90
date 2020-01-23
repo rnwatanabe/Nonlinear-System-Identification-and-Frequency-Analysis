@@ -28,7 +28,7 @@ module frolsfunctions
             end do
         end function fiboseries
         
-        recursive subroutine mfrols(p, y, pho, s, ESR, l, errorRR, A, q, g, verbose, sizeP, M, K, beta, M0)
+        recursive subroutine mfrols(p, y, pho, s, ESR, l, errorRR, A, qs, g, verbose, sizeP, M, K, beta, M0)
     !         '''
     !         Implements the MFROLS algorithm (see page 97 from Billings, SA (2013)).
     !             written by: Renato Naville Watanabe
@@ -54,8 +54,8 @@ module frolsfunctions
     !         '''
             integer, parameter :: wp = kind(1.0d0)
             integer, intent(in) :: M, sizeP, K
-            real(wp), intent(in) :: p(:,:,:)
-            real(wp), intent(inout) :: A(M,M,K), q(sizeP,M,K)
+            real(wp), intent(inout) :: p(:,:,:)
+            real(wp), intent(inout) :: A(M,M,K), qs(sizeP,M,K)
             real(wp), intent(in) :: y(:,:)
             real(wp), intent(in) :: pho
             integer, intent(inout) :: s
@@ -67,10 +67,8 @@ module frolsfunctions
             real(wp), dimension(:,:), allocatable :: gs, errorRRTerm
             real(wp), intent(inout) :: errorRR(M)
             real(wp), dimension(:), allocatable :: ERR_m
-            real(wp), allocatable :: qs(:,:,:)
             real(wp), allocatable :: sigma(:)
-            integer :: term, r, i, j, nrhs, info
-            integer :: rArray(s)
+            integer :: term, i, j, nrhs, info
             real(wp), intent(out) :: beta(M, K)
             integer, intent(out) :: M0
             real(wp), dimension(:,:), allocatable :: Ainv
@@ -78,7 +76,7 @@ module frolsfunctions
             integer, dimension(:), allocatable :: ipiv
                    
             
-            rArray = [(i, i=1,s, 1)]
+            
             verboseCond = .false.
             if (present(verbose)) then
                 verboseCond = verbose
@@ -92,8 +90,6 @@ module frolsfunctions
             errorRRTerm = 0.0
             allocate(sigma(K))
             
-            qs = p
-            
             sigma = sum(y**2, dim=1)
             
             do term = 1, M
@@ -101,11 +97,11 @@ module frolsfunctions
 !                     ## The Gram-Schmidt method was implemented in a modified way,
 !                     ## as shown in Rice, JR(1966)                
                     
-                    do r = 1, s-1
+                    if (s>1) then
                         qs(:, term, :) = qs(:, term, :) - &
-                                        spread(sum(q(:, r, :)*qs(:, term, :), dim=1) / & 
-                                        sum(q(:, r, :)*q(:, r, :), dim=1), 1, sizeP)*q(:, r, :)
-                    end do
+                                        spread(sum(qs(:, l(s-1), :)*qs(:, term, :), dim=1) / & 
+                                        sum(qs(:, l(s-1), :)*qs(:, l(s-1), :), dim=1), 1, sizeP)*qs(:, l(s-1), :)
+                    end if
                     
                     gs(:, term) = sum(y*reshape(qs(:, term, :), (/sizeP, K/)), dim=1)/&
                                   (sum(qs(:, term, :)*qs(:, term, :), dim=1) + 1e-6)
@@ -120,10 +116,10 @@ module frolsfunctions
             l(s) = maxloc(ERR_m, dim=1)
             errorRR(s) = ERR_m(l(s))
                        
-            A(rArray, s, :) = sum(q(:, rArray, :)*spread(p(:, l(s), :), 2, size(rArray)), dim=1)/&
-                              (sum(q(:, rArray, :)*q(:, rArray, :), dim=1))
+            A(1:s-1, s, :) = sum(qs(:, l(1:s-1), :)*spread(p(:, l(s), :), 2, s-1), dim=1)/&
+                              (sum(qs(:, l(1:s-1), :)*qs(:, l(1:s-1), :), dim=1))
             A(s, s, :) = 1.0
-            q(:, s, :) = qs(:, l(s), :)
+            
             g(:, s) = gs(:, l(s))
         
             ESR = ESR - errorRR(s)   
@@ -136,9 +132,8 @@ module frolsfunctions
                     print *, 'ERR', errorRR(s)
                 end if
                 s = s + 1
-                deallocate(qs)
                 deallocate(gs)
-                call mfrols(p, y, pho, s, ESR, l, errorRR, A, q, g, verbose, sizeP, M, K, beta, M0)
+                call mfrols(p, y, pho, s, ESR, l, errorRR, A, qs, g, verbose, sizeP, M, K, beta, M0)
             else
                 if (verboseCond) then
                     print *, 'term number', s

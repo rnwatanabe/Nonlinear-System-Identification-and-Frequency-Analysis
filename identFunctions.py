@@ -645,7 +645,7 @@ def executeMFrols(p,y, pho, D, L=1, supress=False, mfrolsEngine='python'):
             l = -1*np.ones((M), dtype=np.int32, order='F')
             err = np.zeros((M), dtype=float, order='F')
             A = np.zeros((M, M, 1), dtype=float, order='F')
-            q = np.zeros_like(p)
+            
             g = np.zeros((1, M), dtype=float, order='F')
     
         if np.ndim(y) == 1:
@@ -657,8 +657,9 @@ def executeMFrols(p,y, pho, D, L=1, supress=False, mfrolsEngine='python'):
         K = p.shape[2]
         beta = np.zeros((M, K))
         M0 = 0
+        qs = np.copy(p)
         beta, M0 = frolsfunctions.frolsfunctions.mfrols(p, y, pho, s, ESR, l, err, 
-                                                        A, q, g, not supress, 
+                                                        A, qs, g, not supress, 
                                                         p.shape[0], M, K)
         l = l - 1
         beta = beta[0:M0,:]
