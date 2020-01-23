@@ -39,7 +39,6 @@ def mols(p, y, L=1):
     gs = np.zeros((L, M))
     beta = np.zeros((M, L))
 
-
     qs = np.copy(p)
     
     for m in range(M):
@@ -132,7 +131,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
     qs = np.copy(p)
     
     sigma = np.sum(y**2, axis=0)
-            
+    
     for m in range(M):
         if np.all(m!=l):
             ## The Gram-Schmidt method was implemented in a modified way,
@@ -264,48 +263,78 @@ def validation(u, xi, D, ustring='u', ystring='y'):
     phi_xixiu = np.zeros((u.shape[0]-1, u.shape[1]))
     phi_u2xi = np.zeros((u.shape[0], u.shape[1]))
     phi_u2xi2 = np.zeros((u.shape[0], u.shape[1]))
+    CB1 = 0
+    CB2 = 0
+    CB3 = 0
+    CB4 = 0
+    CB5 = 0
+    
     for i in range(trials):
         xiu = xi[0:-1, i]*u[0:-1, i]
         u2 = u[:,i]**2 - np.mean(u[:,i]**2)
-        phi_xixi[:, i], lags, CB = crosscorr(xi[:,i], xi[:,i], 0.1)
-        phi_uxi[:, i], lags, CB = crosscorr(u[:,i], xi[:,i], 0.1) 
-        phi_xixiu[:, i], lags1, CB1 = crosscorr(xi[1:,i],xiu, 0.1)
-        phi_u2xi[:, i], lags, CB1 = crosscorr(u2,xi[:,i], 0.1)
-        phi_u2xi2[:, i], lags, CB1 = crosscorr(u2,xi[:,i]**2, 0.1)
+        phi_xixi[:, i], lags, CB1new = crosscorr(xi[:,i], xi[:,i], 0.1)
+        if np.max(np.abs(CB1new)) > CB1: CB1 = np.max(np.abs(CB1new))
+        phi_uxi[:, i], lags, CB2new = crosscorr(u[:,i], xi[:,i], 0.1) 
+        if np.max(np.abs(CB2new)) > CB2: CB2 = np.max(np.abs(CB2new))
+        phi_xixiu[:, i], lags1, CB3new = crosscorr(xi[1:,i],xiu, 0.1)
+        if np.max(np.abs(CB3new)) > CB3: CB3 = np.max(np.abs(CB3new))
+        phi_u2xi[:, i], lags, CB4new = crosscorr(u2,xi[:,i], 0.1)
+        if np.max(np.abs(CB4new)) > CB4: CB4 = np.max(np.abs(CB4new))
+        phi_u2xi2[:, i], lags, CB5new = crosscorr(u2,xi[:,i]**2, 0.1)
+        if np.max(np.abs(CB5new)) > CB5: CB5 = np.max(np.abs(CB5new))
+        
     plt.figure()
     plt.title(['Validation Tests - trial ', i])
     plt.subplot(5, 1, 1)
     plt.plot(lags, phi_xixi)
-    plt.plot(lags, np.mean(phi_xixi, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
+    plt.plot(lags, np.mean(phi_xixi, axis=1), '-k', linewidth=4) 
+    plt.plot(lags, -CB1*np.ones_like(lags), '--b', lags, CB1*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{\xi_'+ ystring +'\\xi_'+ ystring +'}$')
     plt.xlim(-3*maxLag, 3*maxLag)
     plt.ylim(-1, 1)
     plt.subplot(5, 1, 2)        
     plt.plot(lags, phi_uxi)
-    plt.plot(lags, np.mean(phi_uxi, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
+    plt.plot(lags, np.mean(phi_uxi, axis=1), '-k', linewidth=4)
+    plt.plot(lags, -CB2*np.ones_like(lags), '--b', lags, CB2*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{' + ustring + '\\xi_'+ ystring+'}$')
     plt.xlim(-3*maxLag, -1)
     plt.ylim(-1, 1)
     plt.subplot(5, 1, 3)
     plt.plot(lags1, phi_xixiu)
-    plt.plot(lags1, np.mean(phi_xixiu, axis=1), '-k', lags1, CB1[0]*np.ones_like(lags1), '--b', lags1, CB1[1]*np.ones_like(lags1), '--b')
+    plt.plot(lags1, np.mean(phi_xixiu, axis=1), '-k', linewidth=4)
+    plt.plot(lags1, -CB3*np.ones_like(lags1), '--b', lags1, CB3*np.ones_like(lags1), '--b')
     plt.ylabel(r'$\Phi_{\xi_' + ystring + '(\\xi_' + ystring + ustring + ')}$')
     plt.xlim(0, 3*maxLag)
     plt.ylim(-1, 1)
     plt.subplot(5, 1, 4)
     plt.plot(lags, phi_u2xi)
-    plt.plot(lags, np.mean(phi_u2xi, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
+    plt.plot(lags, np.mean(phi_u2xi, axis=1), '-k', linewidth=4)
+    plt.plot(lags, -CB4*np.ones_like(lags), '--b', lags, CB4*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring +'}$')
     plt.ylim(-1, 1)
     plt.xlim(-3*maxLag, 3*maxLag)
     plt.subplot(5, 1, 5)
     plt.plot(lags, phi_u2xi2)
-    plt.plot(lags, np.mean(phi_u2xi2, axis=1), '-k', lags, CB[0]*np.ones_like(lags), '--b', lags, CB[1]*np.ones_like(lags), '--b')
+    plt.plot(lags, np.mean(phi_u2xi2, axis=1), '-k', linewidth=4)
+    plt.plot(lags, -CB5*np.ones_like(lags), '--b', lags, CB5*np.ones_like(lags), '--b')
     plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring + '^2}$')
     plt.ylim(-1, 1)
     plt.xlim(-3*maxLag, 3*maxLag)
     plt.subplots_adjust(hspace=0.5)
     plt.show()
+    
+    failedTrials = np.array([]).reshape(-1,1)
+    for i in range(trials):
+        if (np.any(np.abs(phi_u2xi2[np.abs(lags)<3*maxLag, i])>CB5) 
+            or np.any(np.abs(phi_u2xi[np.abs(lags)<3*maxLag, i])>CB4)
+            or np.any(np.abs(phi_xixiu[np.logical_and(np.abs(lags1) < 0,np.abs(lags1) < 3*maxLag), i])>CB3)
+            or np.any(np.abs(phi_uxi[np.logical_and(lags<0, np.abs(lags)<3*maxLag), i])>CB2)
+            or np.any(np.abs(phi_xixi[np.logical_and(lags!=0, np.abs(lags)<3*maxLag), i])>CB1)):
+            failedTrials = np.vstack((failedTrials, np.array([i])))
+    
+    return failedTrials
+    
+    
 def validationTimeSeries(xi, maxLag):
     '''
      Runs the tests form Eq. 5.13 in Billings (2013).
@@ -475,8 +504,8 @@ def findDegreeFromStruct(D):
                 
     return maxDegree
 
-def pMatrixFromStruct(u, y, n, D, ustring = 'u', 
-                      ystring = 'y', nstring = 'n'):
+def pMatrixFromStruct(u, y, n, D, ustring='u', 
+                      ystring='y', nstring='n'):
     
     maxLag = findMaxLagFromStruct(D)
     
@@ -547,7 +576,7 @@ def pNoiseMatrix(u,y,n, maxLagu, maxLagy, maxLagNoise,
         multindD = buildMultipliedTerms(terms)
         indToRemove = np.reshape(np.array([]), (-1, 1))
         for j in range(len(multindD)):
-            if multindD[j].find('n') == -1:
+            if multindD[j].find(nstring) == -1:
                 indToRemove = np.vstack((indToRemove, j))
         multindD = np.delete(multindD, indToRemove)
         if i == 1:
@@ -573,8 +602,8 @@ def reshapepymatrices(p, y, L):
     if len(p.shape) == 2:
         p = p.reshape(p.shape[0], p.shape[1], 1)
     m = int(np.floor(p.shape[0]/L))
-    ptemp = np.zeros((m,p.shape[1],L*p.shape[2]))
-    ytemp = np.zeros((m,L*p.shape[2]))
+    ptemp = np.zeros((m,p.shape[1],L*p.shape[2]), dtype=float, order='F')
+    ytemp = np.zeros((m,L*p.shape[2]), dtype=float, order='F')
     for j in range(p.shape[2]):
         for i in range(L):
             ptemp[:,:,j*L+i] = p[m*i:m*(i+1),:, j]
@@ -593,18 +622,46 @@ def reshapeyvector(y, L):
     yt = ytemp
     return yt
 
-def executeMFrols(p,y, pho, D, L=1, supress = False):
+def executeMFrols(p,y, pho, D, L=1, supress=False, mfrolsEngine='python'):
+    import frolsfunctions
     
     p, y = reshapepymatrices(p, y, L)    
     s = 0
-    ESR = 1
-    l = -1*np.ones((p.shape[1]))
-    err = np.zeros((p.shape[1]))
-    A = np.zeros((p.shape[1], p.shape[1], p.shape[2]))
+    ESR = 1.0
+    l = -1*np.ones((p.shape[1]), dtype=np.int32, order='F')
+    err = np.zeros((p.shape[1]), dtype=float, order='F')
+    A = np.zeros((p.shape[1], p.shape[1], p.shape[2]), dtype=float, order='F')
     q = np.zeros_like(p)
-    g = np.zeros((p.shape[2], p.shape[1]))
+    g = np.zeros((p.shape[2], p.shape[1]), dtype=float, order='F')
     
-    beta, l, M0 = mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose= not supress)
+    if mfrolsEngine == 'python':
+        beta, l, M0 = mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose= not supress)
+    if mfrolsEngine == 'fortran':
+        if np.ndim(p) == 2:
+            pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1), dtype=float, order='F')
+            pTemp[:, :, 0] = p
+            p = pTemp
+            M = p.shape[1]
+            l = -1*np.ones((M), dtype=np.int32, order='F')
+            err = np.zeros((M), dtype=float, order='F')
+            A = np.zeros((M, M, 1), dtype=float, order='F')
+            q = np.zeros_like(p)
+            g = np.zeros((1, M), dtype=float, order='F')
+    
+        if np.ndim(y) == 1:
+            yTemp = np.zeros((np.shape(y)[0], 1))
+            yTemp[:, 0] = y
+            y = yTemp
+        s = 1
+        M = p.shape[1]
+        K = p.shape[2]
+        beta = np.zeros((M, K))
+        M0 = 0
+        beta, M0 = frolsfunctions.frolsfunctions.mfrols(p, y, pho, s, ESR, l, err, 
+                                                        A, q, g, not supress, 
+                                                        p.shape[0], M, K)
+        l = l - 1
+        beta = beta[0:M0,:]
 
     betatemp = np.zeros((p.shape[1],1))
     
@@ -694,8 +751,10 @@ def els(u, y, n, maxLagu, maxLagy, maxLagn, structure = 'ARMA', maxIter = 6, ust
 
 def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
                   ystring='y', nstring='n', Nmax=20000, lamb=1,
-                  pho=1e-2, supress=False, L=5, method='mfrols'):
+                  pho=1e-2, supress=False, L=5, method='mfrols', 
+                  elsEngine='python'):
           
+    import frolsfunctions
     
     for k in range(maxIter):
         if not supress: 
@@ -715,6 +774,7 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
         
 #        betan = ls(pn, y[maxLag:])
 #        betan = mols(pn, y[maxLag:], L = 40)
+        
         if k==maxIter-1: 
             supressMessage = supress
         else:
@@ -722,8 +782,16 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
         if method=='RLS':
                 if not supress: 
                     print('Executing RLS method')
-                betan, e_betan, _, betani = RLS(pn, y[maxLag:,:], lamb=lamb, Nmax=Nmax, 
-                                                supress=supressMessage)
+                if elsEngine == 'python':
+                        betan, e_betan, _, betani = RLS(pn, y[maxLag:,:], lamb=lamb, Nmax=Nmax, 
+                                                        supress=supressMessage)
+                if elsEngine == 'fortran':
+                        M = pn.shape[1]
+                        K = pn.shape[2]
+                        betan, betani = frolsfunctions.frolsfunctions.rls(pn, y[maxLag:,:], lamb, Nmax,  
+                                                                                   pn.shape[0], M, K, 
+                                                                                   supress=supressMessage)
+                        
         if method=='mfrols':
                 if not supress: 
                     print('Executing MFROLS method')
@@ -732,10 +800,17 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
         if method=='mols':                
                 if not supress: 
                     print('Executing MOLS method')
-                betan, betani = mols(pn, y[maxLag:,:], L=L)
+                if elsEngine == 'python':
+                    betan, betani = mols(pn, y[maxLag:,:], L=L)
+                if elsEngine == 'fortran':
+                    pnmols, ymols = reshapepymatrices(pn, y[maxLag:,:], L=L)
+                    M = pnmols.shape[1]
+                    K = pnmols.shape[2]
+                    betan, betani = frolsfunctions.frolsfunctions.mols(pnmols, ymols, pnmols.shape[0], M, K)
         if not supress: 
-            print('Computing residue of the identification')        
-        for i in range(y.shape[1]):            
+            print('Computing residue of the identification')   
+        
+        for i in range(y.shape[1]):    
             n[maxLag:,[i]] = y[maxLag:,[i]] - pn[:,:,i]@betani[:,[i]]
         
         if not supress:
@@ -745,25 +820,57 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
 
 def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                   ystring='y', nstring='n', delay=0, degree=1, L=5,
-                  constantTerm=True, pho = 0.01, supress=False, 
-                  method='mfrols', elsMethod='mols', elsMaxIter=10):
+                  constantTerm=True, pho = 0.01, supress=False,
+                  method='mfrols', elsMethod='mols', elsMaxIter=10,
+                  useStruct=[], mfrolsEngine='python', elsEngine='python'):
+    
+    import frolsfunctions
     
     if len(y.shape) == 1:
         y = y.reshape(-1,1)
         u = u.reshape(-1,1)
     
-    for i in range(y.shape[1]):
-        pNew, D = pMatrix(u[:,[i]], y[:,[i]], maxLagu, maxLagy, ustring=ustring,
-                          ystring=ystring, delay=delay, degree=degree,
-                          constantTerm=constantTerm)
-        if i == 0:
-            p = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
-        else:
-            pNew = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
-            p = np.concatenate((p, pNew), axis=2)
-    
-   
-    beta_uy = executeMFrols(p, y[max(maxLagu, maxLagy):,:], pho, D, L=L, supress=supress)
+    if not supress: 
+            print('Mounting matrix of features for the MFROLS method')
+        
+    if len(useStruct) == 0:
+        for i in range(y.shape[1]):
+            pNew, D = pMatrix(u[:,[i]], y[:,[i]], maxLagu, maxLagy, 
+                              ustring=ustring, ystring=ystring, delay=delay, 
+                              degree=degree, constantTerm=constantTerm)
+            if i == 0:
+                p = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
+            else:
+                pNew = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
+                p = np.concatenate((p, pNew), axis=2)
+    else:
+        D = useStruct
+        for i in range(y.shape[1]):
+            pNew, Dn, _ = pMatrixFromStruct(u[:,[i]], y[:,[i]], 0, D, 
+                          ustring=ustring, ystring=ystring,
+                          nstring=nstring)
+            if i == 0:
+                p = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
+            else:
+                pNew = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
+                p = np.concatenate((p, pNew), axis=2)
+      
+    if method == 'mfrols':
+        if not supress: 
+            print('Executing MFROLS method')
+        beta_uy = executeMFrols(p, y[max(maxLagu, maxLagy):,:], pho, D, L=L, 
+                                supress=supress, mfrolsEngine=mfrolsEngine)
+    if method == 'mols':
+        if not supress: 
+            print('Executing MOLS method')
+        if mfrolsEngine == 'python':
+            beta_uy, _ = mols(p, y[max(maxLagu, maxLagy):,:], L=L)
+        if mfrolsEngine == 'fortran':
+            pmols, ymols = reshapepymatrices(p, y[max(maxLagu, maxLagy):,:], L=L)
+            M = pmols.shape[1]
+            K = pmols.shape[2]
+            beta_uy, _ = frolsfunctions.frolsfunctions.mols(pmols, ymols, pmols.shape[0], M, K)
+        
     
     if elsMethod != 'mfrols':
        indicesToRemove = []
@@ -776,21 +883,23 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
     degree = findDegreeFromStruct(D)
     
     ny = np.zeros((u.shape[0]-maxLagn, u.shape[1]))
-    
        
-    _, Dn = pNoiseMatrix(u[maxLagn:,[0]], y[maxLagn:,[0]], ny[:,[0]], maxLagu, maxLagy,
-                         maxLagn, ustring=ustring, ystring=ystring, 
-                         nstring=nstring, delay=1, degree=degree,
+    _, Dn = pNoiseMatrix(u[maxLagn:,[0]], y[maxLagn:,[0]], ny[:,[0]], maxLagu, 
+                         maxLagy, maxLagn, ustring=ustring, ystring=ystring,
+                         nstring=nstring, delay=1, degree=degree, 
                          constantTerm=False)
-      
+    del p  
     
     
     Dels = np.hstack((D, Dn))
+    if not supress: 
+            print('Initiating ELS method')
     beta_uy_ELS, _, nELS, _ = elsWithStruct(u[maxLagn:,:], y[maxLagn:,:], ny, Dels,
                                             maxIter=elsMaxIter, ustring=ustring, 
                                             ystring=ystring, nstring=nstring, 
                                             supress=supress, pho=pho, L=L,
-                                            method=elsMethod, Nmax=p.shape[0])
+                                            method=elsMethod, Nmax=u.shape[0],
+                                            elsEngine=elsEngine)
     
     beta_uy = beta_uy_ELS[0:len(D)]
     

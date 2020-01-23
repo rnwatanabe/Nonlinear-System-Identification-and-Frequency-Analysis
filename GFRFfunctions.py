@@ -567,7 +567,7 @@ def determineFrequencies(f, fres, n, f_inputMin, f_inputMax):
                                                np.abs(fVector[n]) >= f_inputMin[n-1])
         
         for j in range(1, n+1):
-            fVector[j] = np.reshape(fVector[j][validFrequenciesIndex], -1, 1)        
+            fVector[j] = np.reshape(fVector[j][validFrequenciesIndex], -1)
         
         return fVector
     
@@ -589,18 +589,16 @@ def ismember(a, b):
                   array containing the lowest absolute index in B for each element
                   in A which is a member of B and 0 if there is no such index.
         '''
-        lia = np.isin(a, b)       
+        lia = np.isin(a, b)
         
         indexes = np.arange(0, len(a), 1)[lia]
         locb = np.zeros_like(a)
         
         for j in range(len(b)):
-                locb[indexes[a[indexes] == b[j]]] = j    
+                locb[indexes[a[indexes] == b[j]]] = j
         
         return lia, locb
-
-
-
+    
 def inputFFTDegree(X, freqIndex, degree):
         '''    
         % Computes the FFT of the specified degree at the specified frequency combinations.
@@ -849,25 +847,27 @@ def computeIuy(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
 
 def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
          Hnuy, Hnyu, f_inputMin, f_inputMax, maxOrder, 
-         L=9, ustring='u', ystring='y'):
+         L=9, ustring='u', ystring='y', 
+         mfrolsEngine='python', elsEngine='python'):
+    
+        import identFunctions as ident
+        import matplotlib.pyplot as plt
         
         f = np.arange(-Fs/2, Fs/2, fres)
         
-        
-        beta_nuy, Dnuy = findNoiseModel(beta_uy, Duy, ustring=ustring, 
+        beta_nuy, Dnuy = findNoiseModel(beta_uy, Duy, ustring=ustring,
                                         ystring=ystring, nstring='e')
         
-        Hnnuy = computeSystemGFRF(Duy, Fs, beta_uy, maxOrder, 
-                                  ustring=ustring, ystring=ystring, 
+        Hnnuy = computeSystemGFRF(Duy, Fs, beta_uy, maxOrder,
+                                  ustring=ustring, ystring=ystring,
                                   noiseFlag=True)
         
-        beta_nyu, Dnyu = findNoiseModel(beta_yu, Dyu, ustring=ystring, 
-                                        ystring=ustring, nstring='f')      
+        beta_nyu, Dnyu = findNoiseModel(beta_yu, Dyu, ustring=ystring,
+                                        ystring=ustring, nstring='f')
         
         Hnnyu = computeSystemGFRF(Dyu, Fs, beta_yu, maxOrder,
                                   ustring=ystring, ystring=ustring,
                                   noiseFlag=True)
-        
         
         Nsegment = len(u)//(L//2 + 1)
         
@@ -904,24 +904,94 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
                                       f_inputMin, f_inputMax, maxOrder=1, 
                                       ustring=ystring, ystring=ustring)
                 
-        Iuy = np.mean(Iuyn, axis=1)         
+        Iuy = np.mean(Iuyn, axis=1)
         Iyu = np.mean(Iyun, axis=1)
         Iuu = np.mean(Iuun, axis=1)
         Iyy = np.mean(Iyyn, axis=1)
-        IuyLinear = np.mean(IuynLinear, axis=1)         
+        IuyLinear = np.mean(IuynLinear, axis=1)
+        IyuLinear = np.mean(IyunLinear, axis=1)
+        
+        # NPDCuy = Iuy/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
+        # NPDCyu = Iyu/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
+        # NPDCuyn = Iuyn/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
+        # NPDCyun = Iyun/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
+        
+        # NPDCuyLinear = IuyLinear/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
+        # NPDCyuLinear = IyuLinear/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
+        # NPDCuynLinear = IuynLinear/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
+        # NPDCyunLinear = IyunLinear/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
+        
+        
+        
+        idu = np.random.rand(*uDivided.shape).argsort(0)
+        uDividedShuffle = uDivided[idu, np.arange(uDivided.shape[1])]
+        
+        idy = np.random.rand(*yDivided.shape).argsort(0)
+        yDividedShuffle = yDivided[idy, np.arange(yDivided.shape[1])]
+        
+        beta_uyShuffle, nyShuffle, DuyShuffle = ident.identifyModel(uDividedShuffle, yDividedShuffle, 0, 0, ustring=ustring,
+                                                                    ystring=ystring, nstring='n', L=1,
+                                                                    supress=True, method='mols', elsMethod='mols', 
+                                                                    elsMaxIter=2, useStruct=Duy, mfrolsEngine=mfrolsEngine,
+                                                                    elsEngine=elsEngine)
+        
+        beta_yuShuffle, nuShuffle, DyuShuffle = ident.identifyModel(yDividedShuffle, uDividedShuffle, 0, 0, 
+                                                                    ustring=ystring, ystring=ustring, nstring='m', L=1, 
+                                                                    supress=True, method='mols', elsMethod='mols', 
+                                                                    elsMaxIter=2, useStruct=Dyu)
+        
+        HnuyShuffle = computeSystemGFRF(DuyShuffle, Fs, beta_uyShuffle, maxOrder, ustring=ustring, ystring=ystring)
+        HnyuShuffle = computeSystemGFRF(DyuShuffle, Fs, beta_yuShuffle, maxOrder, ustring=ystring, ystring=ustring)
+        
+        beta_nuyShuffle, DnuyShuffle = findNoiseModel(beta_uyShuffle, DuyShuffle, ustring=ustring,
+                                                      ystring=ystring, nstring='e')
+        
+        HnnuyShuffle = computeSystemGFRF(DuyShuffle, Fs, beta_uyShuffle, maxOrder,
+                                         ustring=ustring, ystring=ystring,
+                                         noiseFlag=True)
+        
+        beta_nyuShuffle, DnyuShuffle = findNoiseModel(beta_yuShuffle, DyuShuffle, ustring=ystring,
+                                                      ystring=ustring, nstring='f')
+        
+        HnnyuShuffle = computeSystemGFRF(DyuShuffle, Fs, beta_yuShuffle, maxOrder,
+                                         ustring=ystring, ystring=ustring,
+                                         noiseFlag=True)
+        
+        Nsegment = len(u)//(L//2 + 1)
+        
+        IuynConf, f, IyynConf = computeIuy(uDividedShuffle, yDividedShuffle,
+                                           Fs, fres, beta_uyShuffle, beta_yuShuffle, DuyShuffle, DyuShuffle,
+                                           HnuyShuffle, HnyuShuffle, HnnuyShuffle, HnnyuShuffle, f_inputMin, 
+                                           f_inputMax, maxOrder=maxOrder,
+                                           ustring=ustring, ystring=ystring)
+        
+        IyunConf, f, IuunConf = computeIuy(yDividedShuffle, uDividedShuffle, 
+                                           Fs, fres, beta_yuShuffle, beta_uyShuffle, 
+                                           DyuShuffle, DuyShuffle, HnyuShuffle, HnuyShuffle, 
+                                           HnnyuShuffle, HnnuyShuffle,
+                                           f_inputMin, f_inputMax, maxOrder=maxOrder, 
+                                           ustring=ystring, ystring=ustring)
+        
+        
+        # plt.figure()
+        # plt.hist(np.max(IuynConf, axis=0), 10)
+        # plt.show()
+        
+        # plt.figure()
+        # plt.hist(np.max(IyunConf, axis=0), 10)
+        # plt.show()
+        
+        IuyConf = np.percentile(np.abs(IuynConf), 100)
+        IyuConf = np.percentile(np.abs(IyunConf), 100)
+        
+        Iuy = np.mean(Iuyn, axis=1)
+        Iyu = np.mean(Iyun, axis=1)
+        Iuu = np.mean(Iuun, axis=1)
+        Iyy = np.mean(Iyyn, axis=1)
+        IuyLinear = np.mean(IuynLinear, axis=1)
         IyuLinear = np.mean(IyunLinear, axis=1)
         
         
-        NPDCuy = np.mean(Iuyn/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2), axis=1)
-        NPDCyu = np.mean(Iyun/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2), axis=1)
-        NPDCuyn = Iuyn/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
-        NPDCyun = Iyun/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
-        
-        NPDCuyLinear = IuyLinear/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
-        NPDCyuLinear = IyuLinear/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
-        NPDCuynLinear = IuynLinear/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
-        NPDCyunLinear = IyunLinear/np.sqrt(np.abs(Iuyn)**2+np.abs(Iyun)**2+np.abs(Iuun)**2+np.abs(Iyyn)**2)
-        
-        return NPDCuy, NPDCyu, f, NPDCuyn, NPDCyun, NPDCuyLinear, NPDCyuLinear, NPDCuynLinear, NPDCyunLinear
+        return Iuy, Iyu, f, Iuyn, Iyun, IuyLinear, IyuLinear, IuynLinear, IyunLinear, IuyConf, IyuConf
 
 
