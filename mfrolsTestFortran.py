@@ -50,4 +50,10 @@ beta_uy, n_uy, Duy = ident.identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                                          ystring='y', nstring='n', delay=1,
                                          degree=order, L=20, constantTerm=True,
                                          pho = 0.0001, supress=False, 
-                                         mfrolsEngine='fortran')
+                                         mfrolsEngine='fortran', elsEngine='fortran')
+
+beta_yu, n_yu, Dyu = ident.identifyModel(y, u, maxLagy, maxLagu, ustring='y',
+                                         ystring='u', nstring='m', delay=1,
+                                         degree=order, L=20, constantTerm=True,
+                                         pho = 0.0001, supress=False, 
+                                         mfrolsEngine='fortran', elsEngine='fortran')

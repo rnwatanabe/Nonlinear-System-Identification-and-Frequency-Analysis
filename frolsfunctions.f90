@@ -1,33 +1,15 @@
 module frolsfunctions
     use lapack95
+    use blas95
     use f95_precision          
     implicit none
-    include 'mkl.fi'       
+    ! gfortran -c ~/intel/mkl2019/mkl/include/lapack.f90
+    ! gfortran -c ~/intel/mkl2019/mkl/include/blas.f90
+    ! gfortran -c -I/home/rnwatanabe/intel/mkl2019/compilers_and_libraries_2019.5.281/linux/mkl/include/ ~/Dropbox/Nonlinear-System-Identification-and-Frequency-Analysis/frolsfunctions.f90
+    ! ~/miniconda3/bin/python -m numpy.f2py -I/home/rnwatanabe/intel/mkl2019/mkl/include/ -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_gf_ilp64.a -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_gnu_thread.a -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_core.a -lgomp -lpthread -lm -ldl -c frolsfunctions.f90 -m frolsfunctions
 
     contains 
 
-        recursive function fibonacci(term) result(fibo)
-          integer, intent(in) :: term
-          integer :: fibo
-        
-          if (term <= 1) then
-            fibo = 1
-          else
-            fibo = fibonacci(term-1) + fibonacci(term-2)
-          end if
-          
-        end function fibonacci
-        
-        function fiboseries(N) result(series)
-            integer, intent(in) :: N
-            integer :: series(N)
-            integer :: i
-            
-            do i = 1, N
-                series(i) = fibonacci(i)
-            end do
-        end function fiboseries
-        
         recursive subroutine mfrols(p, y, pho, s, ESR, l, errorRR, A, qs, g, verbose, sizeP, M, K, beta, M0)
     !         '''
     !         Implements the MFROLS algorithm (see page 97 from Billings, SA (2013)).
@@ -52,30 +34,30 @@ module frolsfunctions
     !               l: vector of integers, indices of the chosen terms
     !               M0: number of chosen terms
     !         '''
+            implicit none
+            include 'mkl.fi'
             integer, parameter :: wp = kind(1.0d0)
             integer, intent(in) :: M, sizeP, K
-            real(wp), intent(inout) :: p(:,:,:)
-            real(wp), intent(inout) :: A(M,M,K), qs(sizeP,M,K)
-            real(wp), intent(in) :: y(:,:)
-            real(wp), intent(in) :: pho
+            real(kind=wp), intent(inout) :: p(:,:,:)
+            real(kind=wp), intent(inout) :: A(M,M,K), qs(sizeP,M,K)
+            real(kind=wp), intent(in) :: y(:,:)
+            real(kind=wp), intent(in) :: pho
             integer, intent(inout) :: s
-            real(wp), intent(inout) :: ESR
+            real(kind=wp), intent(inout) :: ESR
             integer, intent(inout) :: l(M)
-            real(wp), intent(inout) :: g(K,M)
+            real(kind=wp), intent(inout) :: g(K,M)
             logical, intent(in), optional :: verbose
             logical :: verboseCond            
-            real(wp), dimension(:,:), allocatable :: gs, errorRRTerm
-            real(wp), intent(inout) :: errorRR(M)
-            real(wp), dimension(:), allocatable :: ERR_m
-            real(wp), allocatable :: sigma(:)
-            integer :: term, i, j, nrhs, info
-            real(wp), intent(out) :: beta(M, K)
+            real(kind=wp), dimension(:,:), allocatable :: gs, errorRRTerm
+            real(kind=wp), intent(inout) :: errorRR(M)
+            real(kind=wp), dimension(:), allocatable :: ERR_m
+            real(kind=wp), allocatable :: sigma(:)
+            integer :: term, j, nrhs, info
+            real(kind=wp), intent(out) :: beta(M, K)
             integer, intent(out) :: M0
-            real(wp), dimension(:,:), allocatable :: Ainv
-            real(wp), dimension(:,:), allocatable :: b   
-            integer, dimension(:), allocatable :: ipiv
-                   
-            
+            real(kind=wp), dimension(:,:), allocatable :: Ainv
+            real(kind=wp), dimension(:,:), allocatable :: b   
+            integer, dimension(:), allocatable :: ipiv           
             
             verboseCond = .false.
             if (present(verbose)) then
@@ -160,17 +142,19 @@ module frolsfunctions
         end subroutine
         
         subroutine mols(p, y, sizeP, M, K, beta_m, beta)
+            implicit none
+            include 'mkl.fi'
             integer, parameter :: wp = kind(1.0d0)
             integer, intent(in) :: M, sizeP, K
-            real(wp), intent(in) :: p(:,:,:)
-            real(wp), intent(in) :: y(:,:)
-            real(wp) :: A(M,M,K), q(sizeP,M,K), qs(sizeP,M,K)
-            real(wp) :: g(K,M), gs(K, M)
-            real(wp), dimension(M,K), intent(out) :: beta
-            real(wp), dimension(M,1), intent(out) :: beta_m
+            real(kind=wp), intent(in) :: p(:,:,:)
+            real(kind=wp), intent(in) :: y(:,:)
+            real(kind=wp) :: A(M,M,K), q(sizeP,M,K), qs(sizeP,M,K)
+            real(kind=wp) :: g(K,M), gs(K, M)
+            real(kind=wp), dimension(M,K), intent(out) :: beta
+            real(kind=wp), dimension(M,1), intent(out) :: beta_m
             integer :: term, r, j, nrhs, info, M0
-            real(wp) :: Ainv(M, M)
-            real(wp) :: b(M,1)
+            real(kind=wp) :: Ainv(M, M)
+            real(kind=wp) :: b(M,1)
             integer :: ipiv(M)  
         
             qs = p
@@ -205,9 +189,10 @@ module frolsfunctions
         end subroutine
         
         function eye(N) result(I)
+            implicit none
             integer, parameter :: wp = kind(1.0d0)
             integer, intent(in) :: N
-            real(wp) :: I(N,N)
+            real(kind=wp) :: I(N,N)
             integer :: k
             
             I(:,:) = 0.0
@@ -219,23 +204,32 @@ module frolsfunctions
              
         end function
         
-        subroutine RLS(p, y, lamb, Nmax, supress, sizeP, M, K, beta_m, beta)
+        subroutine RLS(p, y, lamb, Nmax, sizeP, M, K, supress, beta_m, beta)
+            implicit none
+            include 'mkl.fi'
             integer, parameter :: wp = kind(1.0d0)
-            integer, intent(in) :: M, sizeP, K
-            real(wp), intent(in) :: p(:,:,:)
-            real(wp), intent(in) :: y(:,:)
-            real(wp), intent(in) :: lamb
+            real(kind=wp), intent(in) :: p(sizeP,M,K)
+            real(kind=wp), intent(in) :: y(sizeP,K)
+            real(kind=wp), intent(in) :: lamb
             integer, intent(in) :: Nmax
+            integer, intent(in) :: M, sizeP, K
             logical, intent(in), optional :: supress
             logical :: supressCond
-            real(wp) :: invLambda
-            real(wp), dimension(M, K), intent(out) :: beta
-            real(wp), dimension(M, 1), intent(out) :: beta_m
-            real(wp) :: Pm(M,M,K)
+            real(kind=wp) :: invLambda
+            real(kind=wp), dimension(M, K), intent(out) :: beta
+            real(kind=wp), dimension(M, 1), intent(out) :: beta_m
+            real(kind=wp) :: Pm(M,M,K)
             integer :: i, N, j
-            real(wp), dimension(M, K) :: betaant
-            real(wp), dimension(M, Nmax) :: e_beta
-            real(wp) :: identMatrix(M,M)
+            real(kind=wp), dimension(M, K) :: betaant
+            real(kind=wp), dimension(M, Nmax) :: e_beta
+            real(kind=wp) :: identMatrix(M,M)
+            character*1 :: transa, transb
+            real(kind=wp) :: alpha, gamma
+            integer :: ia
+            real(kind=wp) :: pmp(M), pmpp(M,M), pmpppm(M,M), ppm(M)
+            real(wp) :: pbeta, ppmp
+            real(kind=wp) :: A(M,M), b(M), C(M,1), D(1, M)
+        
             
             supressCond = .false.
             if (present(supress)) then
@@ -251,14 +245,39 @@ module frolsfunctions
             betaant = beta
                        
             i = 1
+            transa = 'N'
+            transb = 'T'
+            alpha = 1.0
+            gamma = 0.0
+            ia = 1
             
             do N = 1, Nmax
                 do j = 1, K
-                    Pm(:,:,j) = invLambda*(Pm(:,:,j) - &
-                                (invLambda*matmul(matmul(matmul(Pm(:,:,j), reshape(p(i,:,j), (/M,1/))), &
-                                reshape(p(i,:,j), (/1, M/))), Pm(:,:,j)))/ &
-                                (1 + invLambda*dot_product(matmul(p(i,:,j), Pm(:,:,j)), p(i,:,j))))
-                    beta(:,j) = beta(:,j) + matmul(Pm(:,:,j), p(i,:,j))*(y(i,j) - dot_product(p(i,:,j), beta(:,j)))
+                    A = Pm(:,:,j)
+                    b = p(i,:,j)
+!                    pmp = matmul(A, b)
+                    call dgemv(transa, M, M, alpha, A, M, b, ia, gamma, pmp, ia)
+!                    pmpp = matmul(reshape(pmp, (/M,1/)), reshape(p(i,:,j), (/1, M/)))                 
+                    C = reshape(pmp, (/M,1/))
+                    D = reshape(p(i,:,j), (/1, M/))
+                    call dgemm(transa, transa, M, M, ia, alpha, &
+                               C, M, D, &
+                               ia, gamma, pmpp, M)
+!                    pmpppm = matmul(pmpp, A)
+                    call dgemm(transa, transa, M, M, M, alpha, &
+                                pmpp, M, A, M, gamma, pmpppm, M)
+!                    ppm = matmul(b, A)
+                    call dgemv(transb, M, M, alpha, A, M, b, ia, gamma, ppm, ia)
+!                    pbeta = dot_product(p(i,:,j), beta(:,j))
+                    pbeta = ddot(M, p(i,:,j), ia, beta(:,j), ia)
+!                    ppmp = dot_product(ppm, p(i,:,j))
+                    ppmp = ddot(M, ppm, ia, p(i,:,j), ia)
+                    Pm(:,:,j) = invLambda*(Pm(:,:,j) - (invLambda*pmpppm)/&
+                                                       (1 + invLambda*ppmp))
+                    A = Pm(:,:,j)
+!                    pmp = matmul(A, b)
+                    call dgemv(transa, M, M, alpha, A, M, b, ia, gamma, pmp, ia)
+                    beta(:,j) = beta(:,j) + pmp*(y(i,j) - pbeta)
                 end do
                 e_beta(:, N) = sum((beta - betaant)**2, dim=2)/K
                 betaant = beta

@@ -88,21 +88,21 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
         written by: Renato Naville Watanabe
         beta = mfrols(p, y, pho, s)
         Inputs:
-          p: matrix of floats, is the matrix of candidate terms.
-          y: vector of floats, output signal.
-          pho: float, stop criteria.
+          p: matrix of np.float64s, is the matrix of candidate terms.
+          y: vector of np.float64s, output signal.
+          pho: np.float64, stop criteria.
           s: integer, iteration step of the mfrols algorithm.
           l: vector of integers, indices of the chosen terms.M = np.shape(p)[1]; l = -1*np.ones((M))
-          err: vector of floats, the error reduction ratio of each chosen term. err = np.zeros((M))
-          ESR: float, the sum of the individual error reduction ratios. Initial value eual 1.
-          A: matrix of floats, auxiliary matrix in the orthogonalization process.
+          err: vector of np.float64s, the error reduction ratio of each chosen term. err = np.zeros((M))
+          ESR: np.float64, the sum of the individual error reduction ratios. Initial value eual 1.
+          A: matrix of np.float64s, auxiliary matrix in the orthogonalization process.
                   A = np.zeros((M,M,1))
-          q: matrix of floats, matrix with each column being the terms orthogonalized
+          q: matrix of np.float64s, matrix with each column being the terms orthogonalized
                   by the Gram-Schmidt process. q = np.zeros_like(p)
-          g: vector of floats, auxiliary vector in the orthogonalization process.
+          g: vector of np.float64s, auxiliary vector in the orthogonalization process.
                   g = np.zeros((1,M))
         Output:
-          beta: vector of floats, coefficients of the chosen terms.
+          beta: vector of np.float64s, coefficients of the chosen terms.
           l: vector of integers, indices of the chosen terms
           M0: number of chosen terms
     '''
@@ -138,7 +138,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
             ## as shown in Rice, JR(1966)                
             for r in range(s):
                 qs[:, [m], :] = qs[:, [m], :] - (np.sum(q[:, [r], :]*qs[:, [m], :], axis=0, keepdims=True)
-                                                 /np.sum(q[:, [r], :]*q[:, [r], :], axis=0, keepdims=True)*q[:, [r], :])
+                                                 /(np.sum(q[:, [r], :]*q[:, [r], :], axis=0, keepdims=True) + 1e-6)*q[:, [r], :])
             
             gs[:, [m]] = (np.sum(y*qs[:, m, :], axis=0, keepdims=True)/(np.sum(qs[:, m, :]*qs[:, m, :], axis=0, keepdims=True) + 1e-6)).T
             
@@ -152,7 +152,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
     err[s] = ERR_m[int(l[s])]
     
     r = np.arange(s)
-    A[r, s, :] = np.sum(q[:, r, :]*p[:, [int(l[s])], :], axis=0)/(np.sum(q[:, r, :]*q[:, r, :], axis=0))
+    A[r, s, :] = np.sum(q[:, r, :]*p[:, [int(l[s])], :], axis=0)/(np.sum(q[:, r, :]*q[:, r, :], axis=0)+1e-6)
     A[s, s, :] = 1.0
     q[:, s, :] = qs[:, int(l[s]), :]
     g[:, s] = gs[:, int(l[s])]
@@ -165,6 +165,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
         if verbose:
             print('term number', s)
             print('ERR', err[s])
+            print(l[:s])
         s += 1
         del qs
         del gs
@@ -173,6 +174,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
         if verbose:
             print('term number', s)
             print('ERR', err[s])
+            print(l[:s])
         s += 1  
         M0 = s              
         beta = np.empty((M0, L))
@@ -194,18 +196,18 @@ def crosscorr(x,y, alpha = 0.05):
      
      Inputs:
        
-       x and y: vector of floats, column-vectors with the signals to compute the cross-correlation.
+       x and y: vector of np.float64s, column-vectors with the signals to compute the cross-correlation.
      
-       alpha: float, significance value of the confidence boundaries. Usually is used alpha = 0.05.
+       alpha: np.float64, significance value of the confidence boundaries. Usually is used alpha = 0.05.
      
      
      Outputs:
      
-       phi: vector of floats, the normalized crosscorrelation.
+       phi: vector of np.float64s, the normalized crosscorrelation.
      
        lags: vector of integers, vector with the corresponding lags of the phi vector.
      
-       CB: vector of 2 float elements, confidence boundaries to consider that the cross-correlation at a given value is zero.
+       CB: vector of 2 np.float64 elements, confidence boundaries to consider that the cross-correlation at a given value is zero.
     '''
     import numpy as np
     from scipy.stats import norm
@@ -602,8 +604,8 @@ def reshapepymatrices(p, y, L):
     if len(p.shape) == 2:
         p = p.reshape(p.shape[0], p.shape[1], 1)
     m = int(np.floor(p.shape[0]/L))
-    ptemp = np.zeros((m,p.shape[1],L*p.shape[2]), dtype=float, order='F')
-    ytemp = np.zeros((m,L*p.shape[2]), dtype=float, order='F')
+    ptemp = np.zeros((m,p.shape[1],L*p.shape[2]), dtype=np.float64, order='F')
+    ytemp = np.zeros((m,L*p.shape[2]), dtype=np.float64, order='F')
     for j in range(p.shape[2]):
         for i in range(L):
             ptemp[:,:,j*L+i] = p[m*i:m*(i+1),:, j]
@@ -622,31 +624,34 @@ def reshapeyvector(y, L):
     yt = ytemp
     return yt
 
-def executeMFrols(p,y, pho, D, L=1, supress=False, mfrolsEngine='python'):
+def executeMFrols(p, y, pho, D, L=1, supress=False, mfrolsEngine='python'):
     import frolsfunctions
+    import gc
     
     p, y = reshapepymatrices(p, y, L)    
     s = 0
     ESR = 1.0
     l = -1*np.ones((p.shape[1]), dtype=np.int32, order='F')
-    err = np.zeros((p.shape[1]), dtype=float, order='F')
-    A = np.zeros((p.shape[1], p.shape[1], p.shape[2]), dtype=float, order='F')
+    err = np.zeros((p.shape[1]), dtype=np.float64, order='F')
+    A = np.zeros((p.shape[1], p.shape[1], p.shape[2]), dtype=np.float64, order='F')
     q = np.zeros_like(p)
-    g = np.zeros((p.shape[2], p.shape[1]), dtype=float, order='F')
+    g = np.zeros((p.shape[2], p.shape[1]), dtype=np.float64, order='F')
+    
+    gc.collect()
     
     if mfrolsEngine == 'python':
         beta, l, M0 = mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose= not supress)
     if mfrolsEngine == 'fortran':
         if np.ndim(p) == 2:
-            pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1), dtype=float, order='F')
+            pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1), dtype=np.float64, order='F')
             pTemp[:, :, 0] = p
             p = pTemp
             M = p.shape[1]
             l = -1*np.ones((M), dtype=np.int32, order='F')
-            err = np.zeros((M), dtype=float, order='F')
-            A = np.zeros((M, M, 1), dtype=float, order='F')
+            err = np.zeros((M), dtype=np.float64, order='F')
+            A = np.zeros((M, M, 1), dtype=np.float64, order='F')
             
-            g = np.zeros((1, M), dtype=float, order='F')
+            g = np.zeros((1, M), dtype=np.float64, order='F')
     
         if np.ndim(y) == 1:
             yTemp = np.zeros((np.shape(y)[0], 1))
@@ -655,9 +660,10 @@ def executeMFrols(p,y, pho, D, L=1, supress=False, mfrolsEngine='python'):
         s = 1
         M = p.shape[1]
         K = p.shape[2]
-        beta = np.zeros((M, K))
+        beta = np.zeros((M, K), np.float64, order='F')
         M0 = 0
         qs = np.copy(p)
+        
         beta, M0 = frolsfunctions.frolsfunctions.mfrols(p, y, pho, s, ESR, l, err, 
                                                         A, qs, g, not supress, 
                                                         p.shape[0], M, K)
@@ -756,6 +762,7 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
                   elsEngine='python'):
           
     import frolsfunctions
+    import gc
     
     for k in range(maxIter):
         if not supress: 
@@ -772,7 +779,8 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
             else:
                 pNew = pNew.reshape(pNew.shape[0], pNew.shape[1], 1)
                 pn = np.concatenate((pn, pNew), axis=2)       
-        
+        del pNew
+        gc.collect()
 #        betan = ls(pn, y[maxLag:])
 #        betan = mols(pn, y[maxLag:], L = 40)
         
@@ -817,6 +825,7 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
         if not supress:
             for i in range(len(D)):
                 if betan[i,0] != 0: print(D[i], betan[i,0])
+        gc.collect()
     return betan, pn, n, D
 
 def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
@@ -826,7 +835,9 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                   useStruct=[], mfrolsEngine='python', elsEngine='python'):
     
     import frolsfunctions
+    import gc
     
+    gc.collect()
     if len(y.shape) == 1:
         y = y.reshape(-1,1)
         u = u.reshape(-1,1)
@@ -890,8 +901,8 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                          nstring=nstring, delay=1, degree=degree, 
                          constantTerm=False)
     del p  
-    
-    
+    gc.collect()
+    i
     Dels = np.hstack((D, Dn))
     if not supress: 
             print('Initiating ELS method')
@@ -901,7 +912,7 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                                             supress=supress, pho=pho, L=L,
                                             method=elsMethod, Nmax=u.shape[0],
                                             elsEngine=elsEngine)
-    
+    gc.collect()
     beta_uy = beta_uy_ELS[0:len(D)]
     
     print('\n')
@@ -912,6 +923,145 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
     ny = nELS
     print('\n')
     return beta_uy, ny, D
+
+def selectFeatures(features, target, featureNames, L=1,
+                   pho = 0.01, supress=False,
+                   mfrolsEngine='python'):
+    
+    import frolsfunctions
+    import gc
+    
+    gc.collect()
+    
+      
+    
+    p, y = reshapepymatrices(features, target, L)    
+    s = 0
+    ESR = 1.0
+    l = -1*np.ones((p.shape[1]), dtype=np.int32, order='F')
+    err = np.zeros((p.shape[1]), dtype=np.float64, order='F')
+    A = np.zeros((p.shape[1], p.shape[1], p.shape[2]), dtype=np.float64, order='F')
+    q = np.zeros_like(p)
+    g = np.zeros((p.shape[2], p.shape[1]), dtype=np.float64, order='F')
+    
+    gc.collect()
+    
+    if mfrolsEngine == 'python':
+        l, M0 = mod(p, pho, s, ESR, l, err, q, verbose= not supress)
+    if mfrolsEngine == 'fortran':
+        if np.ndim(p) == 2:
+            pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1), dtype=np.float64, order='F')
+            pTemp[:, :, 0] = p
+            p = pTemp
+            M = p.shape[1]
+            l = -1*np.ones((M), dtype=np.int32, order='F')
+            err = np.zeros((M), dtype=np.float64, order='F')
+            A = np.zeros((M, M, 1), dtype=np.float64, order='F')
+            
+            g = np.zeros((1, M), dtype=np.float64, order='F')
+    
+        if np.ndim(y) == 1:
+            yTemp = np.zeros((np.shape(y)[0], 1))
+            yTemp[:, 0] = y
+            y = yTemp
+        s = 1
+        M = p.shape[1]
+        K = p.shape[2]
+        beta = np.zeros((M, K), np.float64, order='F')
+        M0 = 0
+        qs = np.copy(p)
+        
+        beta, M0 = frolsfunctions.frolsfunctions.mfrols(p, y, pho, s, ESR, l, err, 
+                                                        A, qs, g, not supress, 
+                                                        p.shape[0], M, K)
+        l = l - 1
+        beta = beta[0:M0,:]
+
+    D = featureNames[l[:M0]]
+    l = l[:M0]
+    
+    del p      
+    gc.collect()
+    
+    return l, D
+
+def mod(features, pho, s, ESR, l, err, q, verbose=False):
+
+    '''
+    Implements the MFROLS algorithm (see page 97 from Billings, SA (2013)).
+        written by: Renato Naville Watanabe
+        beta = mfrols(p, y, pho, s)
+        Inputs:
+          p: matrix of np.float64s, is the matrix of candidate terms.
+          pho: np.float64, stop criteria.
+          s: integer, iteration step of the mfrols algorithm.
+          l: vector of integers, indices of the chosen terms.M = np.shape(p)[1]; l = -1*np.ones((M))
+          err: vector of np.float64s, the error reduction ratio of each chosen term. err = np.zeros((M))
+          ESR: np.float64, the sum of the individual error reduction ratios. Initial value eual 1.
+          A: matrix of np.float64s, auxiliary matrix in the orthogonalization process.
+                  A = np.zeros((M,M,1))
+          q: matrix of np.float64s, matrix with each column being the terms orthogonalized
+                  by the Gram-Schmidt process. q = np.zeros_like(p)
+          g: vector of np.float64s, auxiliary vector in the orthogonalization process.
+                  g = np.zeros((1,M))
+        Output:
+          l: vector of integers, indices of the chosen terms
+          M0: number of chosen terms
+    '''
+    p = features
+    if np.ndim(p) == 2:
+        pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1))
+        pTemp[:, :, 0] = p
+        p = pTemp
+        M = p.shape[1]
+        l = -1*np.ones((M))
+        err = np.zeros((M))
+        q = np.zeros_like(p)
+        g = np.zeros((1, M))
+
+    M = p.shape[1]
+    C = np.zeros((M, M))
+    qs = np.copy(p)
+    
+    for m in range(M):
+        if np.all(m!=l):
+            ## The Gram-Schmidt method was implemented in a modified way,
+            ## as shown in Rice, JR(1966)                
+            for r in range(s):
+                qs[:, [m]] = qs[:, [m]] - (np.sum(q[:, [r]]*qs[:, [m]], axis=0, keepdims=True)
+                                                 /(np.sum(q[:, [r]]*q[:, [r]], axis=0, keepdims=True) + 1e-6)*q[:, [r]])
+                        
+            for j in range(M):
+                C[j, m] = np.sum(qs[:, [m]]*p[:,[m]], axis=0, keepdims=True)/(np.linalg.norm(p[:,[m]])*np.linalg.norm(qs[:,[m]]))**2
+        
+    C_m = np.mean(C, axis=0)
+        
+    l[s] = np.where(C_m==np.nanmax(C_m))[0][0]
+    err[s] = C_m[int(l[s])]
+        
+    q[:, s, :] = qs[:, int(l[s]), :]
+    
+    ## recursive call
+
+    if (err[s]>=pho and s<M-1):
+        if verbose:
+            print('term number', s)
+            print('ERR', err[s])
+            print(l[:s])
+        s += 1
+        del qs
+        l, M0 = mod(p, pho, s, ESR, l, err, q, verbose=verbose)
+    else:
+        if verbose:
+            print('term number', s)
+            print('ERR', err[s])
+            print(l[:s])
+        s += 1  
+        M0 = s              
+        
+        
+    return l, M0
+    
 
 def findModelOrder(u, y, maxOrder, method='RLS', structure = 'ARMA'):
     import matplotlib.pyplot as plt
@@ -1641,11 +1791,11 @@ def  osa(u, y, beta, degree, maxLagu, maxLagy, delay, constantTerm = False):
     %
     % Inputs:
     %	
-    %   u: vector of floats, input signal.
+    %   u: vector of np.float64s, input signal.
     %
-    %   y: vector of floats, output signal.
+    %   y: vector of np.float64s, output signal.
     %
-    %   beta: vector of floats, the coefficients of the model terms.
+    %   beta: vector of np.float64s, the coefficients of the model terms.
     %
     %   l: vector of integers, the indices of the model terms, sorted in the same order of the beta vector. 
     %   It works together with the buildPMatrix function.
@@ -1661,9 +1811,9 @@ def  osa(u, y, beta, degree, maxLagu, maxLagy, delay, constantTerm = False):
     %
     % Outputs:
     %
-    %   yest: vector of floats, the estimated output vector.
+    %   yest: vector of np.float64s, the estimated output vector.
     %
-    %   xi: vector of floats, the residue of the estimation.
+    %   xi: vector of np.float64s, the residue of the estimation.
     '''
     
     
@@ -1702,11 +1852,11 @@ def  osaWithStruct(u, y, beta, D, degree=[], ustring='u', ystring='y'):
     %
     % Inputs:
     %	
-    %   u: vector of floats, input signal.
+    %   u: vector of np.float64s, input signal.
     %
-    %   y: vector of floats, output signal.
+    %   y: vector of np.float64s, output signal.
     %
-    %   beta: vector of floats, the coefficients of the model terms.
+    %   beta: vector of np.float64s, the coefficients of the model terms.
     %
     %   l: vector of integers, the indices of the model terms, sorted in the same order of the beta vector. 
     %   It works together with the buildPMatrix function.
@@ -1722,9 +1872,9 @@ def  osaWithStruct(u, y, beta, D, degree=[], ustring='u', ystring='y'):
     %
     % Outputs:
     %
-    %   yest: vector of floats, the estimated output vector.
+    %   yest: vector of np.float64s, the estimated output vector.
     %
-    %   xi: vector of floats, the residue of the estimation.
+    %   xi: vector of np.float64s, the residue of the estimation.
     '''
     
     if degree != []:
