@@ -3,10 +3,10 @@ module frolsfunctions
     use blas95
     use f95_precision          
     implicit none
-    ! gfortran -c ~/intel/mkl2019/mkl/include/lapack.f90
-    ! gfortran -c ~/intel/mkl2019/mkl/include/blas.f90
-    ! gfortran -c -I/home/rnwatanabe/intel/mkl2019/compilers_and_libraries_2019.5.281/linux/mkl/include/ ~/Dropbox/Nonlinear-System-Identification-and-Frequency-Analysis/frolsfunctions.f90
-    ! ~/miniconda3/bin/python -m numpy.f2py -I/home/rnwatanabe/intel/mkl2019/mkl/include/ -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_gf_ilp64.a -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_gnu_thread.a -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_core.a -lgomp -lpthread -lm -ldl -c frolsfunctions.f90 -m frolsfunctions
+    ! gfortran-8 -c ~/intel/mkl2019/mkl/include/lapack.f90
+    ! gfortran-8 -c ~/intel/mkl2019/mkl/include/blas.f90
+    ! gfortran-8 -c -I/home/rnwatanabe/intel/mkl2019/compilers_and_libraries_2019.5.281/linux/mkl/include/ ~/Dropbox/Nonlinear-System-Identification-and-Frequency-Analysis/frolsfunctions.f90
+    ! ~/miniconda3/bin/python -m numpy.f2py --f90exec=gfortran-8 -I/home/rnwatanabe/intel/mkl2019/mkl/include/ -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_gf_ilp64.a -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_gnu_thread.a -L/home/rnwatanabe/intel/mkl2019/mkl/lib/intel64/libmkl_core.a -lgomp -lpthread -lm -ldl -c frolsfunctions.f90 -m frolsfunctions
 
     contains 
 

@@ -7,7 +7,7 @@ Created on Mon Aug  5 10:01:24 2019
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
+
 
 
 
@@ -309,6 +309,7 @@ def buildHn(order, C, fs, maxLag, noiseFlag=False):
             # Compute the Hn,p with n=order and p=2,..., n
             
             for p in range(2, n+1):
+                print('n=', n, ', p = ', p)
                 for j in range(1, p+1):
                     if j == 1:
                         lagsPvector = 'globals()["lag' + str(j) + '"]'
@@ -338,116 +339,118 @@ def buildHn(order, C, fs, maxLag, noiseFlag=False):
                     
                     exec('globals()["Hnn"][(n,p)] = globals()["Hnn"][(n,p)] + globals()["Hn"][i]*globals()["Hnn"][(n-i,p-1)]' +freqNivector +' *sym.exp(-sym.I*globals()["freqSum"]*globals()["lag' + str(p) + '"])')
                 
-                globals()['inputComponent'] = 0*globals()['f1'] # Component of the GFRF related to the input signal
-                globals()['mixedComponent'] = 0*globals()['f1'] # Component of the GFRF related to the terms with input and output signals multiplied
-                globals()['outputComponent'] = 0*globals()['f1'] # Component of the GFRF related to the output signal
-                globals()['denH'] = 0*globals()['f1'] + 1 # Denominator of the GFRF
-                globals()['numH'] = 0*globals()['f1'] # Numerator of the GFRF
-                               
-                # computation of the input component
-                if 'c_0' + str(n) in locals():
-                    exec('globals()["lagsPosition"] = np.ravel_multi_index(np.where(c_0' + str(n) + ' != 0.0), c_0' + str(n) + '.shape)')
-                    exec('(' + lvector[n] + ',) = np.unravel_index(globals()["lagsPosition"], c_0' + str(n) + '.shape)')
-                    for k in range(len(globals()['lagsPosition'])):
+            globals()['inputComponent'] = 0*globals()['f1'] # Component of the GFRF related to the input signal
+            globals()['mixedComponent'] = 0*globals()['f1'] # Component of the GFRF related to the terms with input and output signals multiplied
+            globals()['outputComponent'] = 0*globals()['f1'] # Component of the GFRF related to the output signal
+            globals()['denH'] = 0*globals()['f1'] + 1 # Denominator of the GFRF
+            globals()['numH'] = 0*globals()['f1'] # Numerator of the GFRF
+                           
+            # computation of the input component
+            if 'c_0' + str(n) in locals():
+                exec('globals()["lagsPosition"] = np.ravel_multi_index(np.where(c_0' + str(n) + ' != 0.0), c_0' + str(n) + '.shape)')
+                exec('(' + lvector[n] + ',) = np.unravel_index(globals()["lagsPosition"], c_0' + str(n) + '.shape)')
+                for k in range(len(globals()['lagsPosition'])):
+                        globals()['freqVector'] = sym.Matrix([])
+                        globals()['lagsVector'] = sym.Matrix([])
+                        for j in range(1, n+1):
+                                exec('globals()["freqVector"] = globals()["freqVector"].col_insert(len(globals()["freqVector"]), sym.Matrix([2*sym.pi*f' + str(j) + '/fs]))')
+                                exec('globals()["lagsVector"] = globals()["lagsVector"].row_insert(len(globals()["lagsVector"]), sym.Matrix([globals()["l' + str(j) + '"][' + str(k) +']]))')
+                        
+                        for j in range(1, n+1):
+                                if j == 1:
+                                    lNvector = 'globals()["l'+ str(j) + '"][k]'
+                                else:
+                                    lNvector = lNvector + ',globals()["l' + str(j) + '"][k]'
+                        globals()['expFreqLag'] = sym.exp(-sym.I*((globals()["freqVector"]*globals()["lagsVector"])[0]))
+                        exec('globals()["inputComponent"] = globals()["inputComponent"] + c_0' + str(n) + '[' + lNvector + ']*globals()["expFreqLag"]')
+                    
+            # computation of the mixed component
+            for q in range(1, n):
+                    for p in range(1, n-q+1):
+                            if 'c_' + str(p) + str(q) in locals():
+                                    exec('globals()["lagsPosition"] = np.ravel_multi_index(np.where(c_' + str(p) + str(q) + ' != 0), c_' + str(p) + str(q) + '.shape)')
+                                    exec(lvector[p+q] + ' = np.unravel_index(globals()["lagsPosition"], c_' + str(p) + str(q) + '.shape)')
+                                                                     
+                                    for k in range(len(globals()['lagsPosition'])):
+                                        globals()['freqVector'] = sym.Matrix([])
+                                        for j in range(n-q+1, n+1):
+                                            exec('globals()["freqVector"] = globals()["freqVector"].col_insert(len(globals()["freqVector"]), sym.Matrix([2*sym.pi*globals()["f' + str(j) + '"]/fs]))')
+                                        
+                                        globals()['lagsVector'] = sym.Matrix([])
+                                        for j in range(p+1, p+q+1):
+                                            exec('globals()["lagsVector"] = globals()["lagsVector"].row_insert(len(globals()["lagsVector"]), sym.Matrix([globals()["l' + str(j) + '"][' + str(k) + ']]))')
+                                        
+                                        globals()['expFreqLag'] = sym.exp(-sym.I*((globals()['freqVector']*globals()['lagsVector'])[0]))
+                                        for j in range(1, p+1):
+                                            if j == 1:
+                                                lPvector = '.subs([(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
+                                            else:
+                                                lPvector = lPvector + ',(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
+                                        lPvector = lPvector + '])'        
+                                        
+                                        for j in range(1, p+q+1):
+                                            if j == 1:
+                                                lNvector = 'globals()["l'+ str(j) + '"][k]'
+                                            else:
+                                                lNvector = lNvector + ',globals()["l' + str(j) + '"][k]'
+                                        
+                                        
+                                        exec('globals()["mixedComponent"] = globals()["mixedComponent"] + c_' + str(p) + str(q) + '[' + lNvector + ']*globals()["expFreqLag"]*globals()["Hnn"][(n-q,p)]'+lPvector)
+                                    
+                            
+                    
+            
+            # computation of the output component
+            for p in range(2, n+1):
+                    if 'c_'+ str(p) + '0'  in locals():
+                            exec('globals()["lagsPosition"] = np.ravel_multi_index(np.where(c_' + str(p) + '0 != 0), c_' + str(p) + '0.shape)')
+                            exec(lvector[p] + ' = np.unravel_index(globals()["lagsPosition"], c_' + str(p) + '0.shape)')
+                            
                             globals()['freqVector'] = sym.Matrix([])
                             globals()['lagsVector'] = sym.Matrix([])
-                            for j in range(1, n+1):
-                                    exec('globals()["freqVector"] = globals()["freqVector"].col_insert(len(globals()["freqVector"]), sym.Matrix([2*sym.pi*f' + str(j) + '/fs]))')
-                                    exec('globals()["lagsVector"] = globals()["lagsVector"].row_insert(len(globals()["lagsVector"]), sym.Matrix([globals()["l' + str(j) + '"][' + str(k) +']]))')
                             
-                            for j in range(1, n+1):
+                            for k in range(len(globals()['lagsPosition'])):
+                                for j in range(1, p+1):
                                     if j == 1:
-                                        lNvector = 'globals()["l'+ str(j) + '"][k]'
+                                        lNvector = 'globals()["l' + str(j) + '"][k]'
                                     else:
-                                        lNvector = lNvector + ',globals()["l' + str(j) + '"][k]'
-                            globals()['expFreqLag'] = sym.exp(-sym.I*((globals()["freqVector"]*globals()["lagsVector"])[0]))
-                            exec('globals()["inputComponent"] = globals()["inputComponent"] + c_0' + str(n) + '[' + lNvector + ']*globals()["expFreqLag"]')
-                        
-                # computation of the mixed component
-                for q in range(1, n):
-                        for p in range(1, n-q+1):
-                                if 'c_' + str(p) + str(q) in locals():
-                                        exec('globals()["lagsPosition"] = np.ravel_multi_index(np.where(c_' + str(p) + str(q) + ' != 0), c_' + str(p) + str(q) + '.shape)')
-                                        exec(lvector[p+q] + ' = np.unravel_index(globals()["lagsPosition"], c_' + str(p) + str(q) + '.shape)')
-                                                                         
-                                        for k in range(len(globals()['lagsPosition'])):
-                                            globals()['freqVector'] = sym.Matrix([])
-                                            for j in range(n-q+1, n+1):
-                                                exec('globals()["freqVector"] = globals()["freqVector"].col_insert(len(globals()["freqVector"]), sym.Matrix([2*sym.pi*globals()["f' + str(j) + '"]/fs]))')
-                                            
-                                            globals()['lagsVector'] = sym.Matrix([])
-                                            for j in range(p+1, p+q+1):
-                                                exec('globals()["lagsVector"] = globals()["lagsVector"].row_insert(len(globals()["lagsVector"]), sym.Matrix([globals()["l' + str(j) + '"][' + str(k) + ']]))')
-                                            
-                                            globals()['expFreqLag'] = sym.exp(-sym.I*((globals()['freqVector']*globals()['lagsVector'])[0]))
-                                            for j in range(1, p+1):
-                                                if j == 1:
-                                                    lPvector = '.subs([(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
-                                                else:
-                                                    lPvector = lPvector + ',(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
-                                            lPvector = lPvector + '])'        
-                                            
-                                            for j in range(1, p+q+1):
-                                                if j == 1:
-                                                    lNvector = 'globals()["l'+ str(j) + '"][k]'
-                                                else:
-                                                    lNvector = lNvector + ',globals()["l' + str(j) + '"][k]'
-                                            
-                                            
-                                            exec('globals()["mixedComponent"] = globals()["mixedComponent"] + c_' + str(p) + str(q) + '[' + lNvector + ']*globals()["expFreqLag"]*globals()["Hnn"][(n-q,p)]'+lPvector)
-                                        
+                                        lNvector = lNvector + ', globals()["l' + str(j) + '"][k]'
                                 
-                        
-                
-                # computation of the output component
-                for p in range(2, n+1):
-                        if 'c_'+ str(p) + '0'  in locals():
-                                exec('globals()["lagsPosition"] = np.ravel_multi_index(np.where(c_' + str(p) + '0 != 0), c_' + str(p) + '0.shape)')
-                                exec(lvector[p] + ' = np.unravel_index(globals()["lagsPosition"], c_' + str(p) + '0.shape)')
-                                
-                                globals()['freqVector'] = sym.Matrix([])
-                                globals()['lagsVector'] = sym.Matrix([])
-                                
-                                for k in range(len(globals()['lagsPosition'])):
-                                    for j in range(1, p+1):
-                                        if j == 1:
-                                            lNvector = 'globals()["l' + str(j) + '"][k]'
-                                        else:
-                                            lNvector = lNvector + ', globals()["l' + str(j) + '"][k]'
+                                for j in range(1, p+1):
+                                    if j == 1:
+                                        lPvector = '.subs([(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
+                                    else:
+                                        lPvector = lPvector + ',(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
+                                lPvector = lPvector + '])'   
                                     
-                                    for j in range(1, p+1):
-                                        if j == 1:
-                                            lPvector = '.subs([(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
-                                        else:
-                                            lPvector = lPvector + ',(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
-                                    lPvector = lPvector + '])'   
-                                        
-                                    
-                                    exec('globals()["outputComponent"] = globals()["outputComponent"] + c_' + str(p) + '0[' + lNvector + ']*globals()["Hnn"][(n,p)]'+lPvector)
-                              
-                # computation of the denominator of the GFRF
-                if 'c_10' in locals():
-                    globals()['lagsPosition'] = np.ravel_multi_index(np.where(c_10 != 0), c_10.shape)
-                    for k in range(len(globals()['lagsPosition'])):
-                        globals()['freqSum'] = 0*globals()["f1"]
-                        for j in range(1, n+1):
-                            exec('globals()["freqSum"] = globals()["freqSum"] + 2*sym.pi*globals()["f' + str(j) + '"]/ fs')
-                        
-                        globals()['denH'] = globals()['denH'] - c_10[globals()['lagsPosition'][k]]*sym.exp(-sym.I*globals()['freqSum']*globals()['lagsPosition'][k])
-               
-                #  Computation of Hn for n = order
-                
-                globals()['numH'] = globals()['inputComponent'] + globals()['mixedComponent'] + globals()['outputComponent']
-                
-                globals()['Hn'][n] = globals()['numH']/globals()['denH']
-        
-                # Computation of Hn,1
+                                print(n)
+                                exec('print(locals()["c_'+ str(p) + '0"])')
+                                exec('print(globals()["Hnn"])')
+                                exec('globals()["outputComponent"] = globals()["outputComponent"] + c_' + str(p) + '0[' + lNvector + ']*globals()["Hnn"][(n,p)]'+lPvector)
+                          
+            # computation of the denominator of the GFRF
+            if 'c_10' in locals():
+                globals()['lagsPosition'] = np.ravel_multi_index(np.where(c_10 != 0), c_10.shape)
+                for k in range(len(globals()['lagsPosition'])):
+                    globals()['freqSum'] = 0*globals()["f1"]
+                    for j in range(1, n+1):
+                        exec('globals()["freqSum"] = globals()["freqSum"] + 2*sym.pi*globals()["f' + str(j) + '"]/ fs')
                     
-                globals()['freqSum'] = 0
-                for j in  range(1, n+1):
-                    exec('globals()["freqSum"] = globals()["freqSum"] + 2*sym.pi*globals()["f' + str(j) + '"]/ fs')
+                    globals()['denH'] = globals()['denH'] - c_10[globals()['lagsPosition'][k]]*sym.exp(-sym.I*globals()['freqSum']*globals()['lagsPosition'][k])
+           
+            #  Computation of Hn for n = order
+            
+            globals()['numH'] = globals()['inputComponent'] + globals()['mixedComponent'] + globals()['outputComponent']
+            
+            globals()['Hn'][n] = globals()['numH']/globals()['denH']
+    
+            # Computation of Hn,1
                 
-                exec('globals()["Hnn"][(' + str(n) + ',1)] = globals()["Hn"][n]*sym.exp(-sym.I*globals()["freqSum"]*lag1)')    
+            globals()['freqSum'] = 0
+            for j in  range(1, n+1):
+                exec('globals()["freqSum"] = globals()["freqSum"] + 2*sym.pi*globals()["f' + str(j) + '"]/ fs')
+            
+            exec('globals()["Hnn"][(' + str(n) + ',1)] = globals()["Hn"][n]*sym.exp(-sym.I*globals()["freqSum"]*lag1)')    
     
         return globals()['Hnn'], globals()['Hn']
 
@@ -781,7 +784,7 @@ def computeNOFRF(Hn, U, minDegree, maxDegree, Fs, fres, fmin, fmax, f_inputMin, 
 def findNoiseModel(beta, D, ustring='u', ystring='y', nstring='n'):
         Dnoise = np.hstack((nstring+'(i-0)', D))
         betanoise = np.vstack((1.0, beta))
-        indToRemove = np.reshape(np.array([]), (-1, 1))
+        indToRemove = np.reshape(np.array([], dtype=np.int), (-1, 1))
         for j in range(len(Dnoise)):
             if Dnoise[j].find(ustring) != -1:
                 indToRemove = np.vstack((indToRemove, j))
@@ -801,15 +804,14 @@ def computeIuy(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
 #        Y, _ = computeSignalFFT(y, Fs, fres)
         
         
+        Duy, beta = ident.findStructWithMaxDegree(Duy, beta_uy, maxOrder)
         maxLag_uy = ident.findMaxLagFromStruct(Duy)
-                    
+        
         n_uy = np.zeros((u.shape[0] - maxLag_uy, u.shape[1]))
         for i in range(u.shape[1]):
             _, n_uy[:,[i]], _ = ident.osaWithStruct(u[:, [i]], y[:, [i]], beta_uy, Duy, degree=maxOrder, 
                                                     ustring=ustring, ystring=ystring)
     
-        
-          
         Nuy, _ = computeSignalFFT(n_uy, Fs, fres)
 #        Nyu, _ = computeSignalFFT(n_yu, Fs, fres)
         
@@ -981,8 +983,10 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
         # plt.hist(np.max(IyunConf, axis=0), 10)
         # plt.show()
         
-        IuyConf = np.percentile(np.abs(IuynConf), 100)
-        IyuConf = np.percentile(np.abs(IyunConf), 100)
+        # IuyConf = np.percentile(np.abs(IuynConf), 50)
+        # IyuConf = np.percentile(np.abs(IyunConf), 50)
+        IuyConf = np.abs(IuynConf.mean(axis=1))
+        IyuConf = np.abs(IyunConf.mean(axis=1))
         
         Iuy = np.mean(Iuyn, axis=1)
         Iyu = np.mean(Iyun, axis=1)

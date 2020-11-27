@@ -576,7 +576,7 @@ def pNoiseMatrix(u,y,n, maxLagu, maxLagy, maxLagNoise,
     for i in range(1, degree+1):
         terms = list(combinations_with_replacement(indD.tolist(), i))
         multindD = buildMultipliedTerms(terms)
-        indToRemove = np.reshape(np.array([]), (-1, 1))
+        indToRemove = np.reshape(np.array([], dtype=np.int), (-1, 1))
         for j in range(len(multindD)):
             if multindD[j].find(nstring) == -1:
                 indToRemove = np.vstack((indToRemove, j))
@@ -588,7 +588,10 @@ def pNoiseMatrix(u,y,n, maxLagu, maxLagy, maxLagNoise,
         else:
             pNew, _, _ = pMatrixFromStruct(u, y, n, multindD, ustring=ustring, 
                                            ystring = ystring)
+            print(D)
+            print(multindD)
             p = np.hstack((p, pNew))
+            
             D = np.hstack((D, multindD))
     if constantTerm:
         pNew = np.ones((p.shape[0], 1))
@@ -625,6 +628,8 @@ def reshapeyvector(y, L):
     return yt
 
 def executeMFrols(p, y, pho, D, L=1, supress=False, mfrolsEngine='python'):
+    import sys
+    sys.path.insert(1, '/home/rnwatanabe/Dropbox/Nonlinear-System-Identification-and-Frequency-Analysis/')
     import frolsfunctions
     import gc
     
@@ -834,7 +839,7 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                   method='mfrols', elsMethod='mols', elsMaxIter=10,
                   useStruct=[], mfrolsEngine='python', elsEngine='python'):
     
-    import frolsfunctions
+    #import frolsfunctions
     import gc
     
     gc.collect()
@@ -896,8 +901,8 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
     
     ny = np.zeros((u.shape[0]-maxLagn, u.shape[1]))
        
-    _, Dn = pNoiseMatrix(u[maxLagn:,[0]], y[maxLagn:,[0]], ny[:,[0]], maxLagu, 
-                         maxLagy, maxLagn, ustring=ustring, ystring=ystring,
+    _, Dn = pNoiseMatrix(u[maxLagn:,[0]], y[maxLagn:,[0]], ny[:,[0]], maxLagn, 
+                         maxLagn, maxLagn, ustring=ustring, ystring=ystring,
                          nstring=nstring, delay=1, degree=degree, 
                          constantTerm=False)
     del p  
