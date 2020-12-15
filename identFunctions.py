@@ -165,7 +165,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
         if verbose:
             print('term number', s)
             print('ERR', err[s])
-            print(l[:s])
+            print(l[:s+1])
         s += 1
         del qs
         del gs
@@ -174,7 +174,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
         if verbose:
             print('term number', s)
             print('ERR', err[s])
-            print(l[:s])
+            print(l[:s+1])
         s += 1  
         M0 = s              
         beta = np.empty((M0, L))

@@ -847,6 +847,7 @@ def computeIuy(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
 
     
 
+
 def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
          Hnuy, Hnyu, f_inputMin, f_inputMax, maxOrder, 
          L=9, ustring='u', ystring='y', 
@@ -931,15 +932,17 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
         idy = np.random.rand(*yDivided.shape).argsort(0)
         yDividedShuffle = yDivided[idy, np.arange(yDivided.shape[1])]
         
+
+        
         beta_uyShuffle, nyShuffle, DuyShuffle = ident.identifyModel(uDividedShuffle, yDividedShuffle, 0, 0, ustring=ustring,
                                                                     ystring=ystring, nstring='n', L=1,
-                                                                    supress=True, method='mols', elsMethod='mols', 
+                                                                    supress=True, method='mols', elsMethod='RLS', 
                                                                     elsMaxIter=2, useStruct=Duy, mfrolsEngine=mfrolsEngine,
                                                                     elsEngine=elsEngine)
         
         beta_yuShuffle, nuShuffle, DyuShuffle = ident.identifyModel(yDividedShuffle, uDividedShuffle, 0, 0, 
                                                                     ustring=ystring, ystring=ustring, nstring='m', L=1, 
-                                                                    supress=True, method='mols', elsMethod='mols', 
+                                                                    supress=True, method='mols', elsMethod='RLS', 
                                                                     elsMaxIter=2, useStruct=Dyu)
         
         HnuyShuffle = computeSystemGFRF(DuyShuffle, Fs, beta_uyShuffle, maxOrder, ustring=ustring, ystring=ystring)
