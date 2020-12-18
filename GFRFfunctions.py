@@ -9,8 +9,6 @@ Created on Mon Aug  5 10:01:24 2019
 import numpy as np
 
 
-
-
 def computeSystemGFRF(Da, Fs, a, degree, ustring='u', ystring='y', noiseFlag=False):
     '''        
     % Computes the GFRFs of a NARX model. It uses the Symbolic Toolbox of Matlab.
@@ -832,6 +830,7 @@ def computeIuy(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
 #                              fmin, fmax, f_inputMin, f_inputMax)        
 ##        
         
+
         
         freq = f >= -fres/2
         f = f[freq]
@@ -840,14 +839,27 @@ def computeIuy(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
         Iuy = np.log((np.abs(Hye)**2 + np.abs(NOFRFuy)**2)/(np.abs(Hye+1e-7)**2))
         Iyy = np.log((np.abs(Hye)**2 + np.abs(NOFRFuy)**2)/(np.abs(NOFRFuy+1e-7)**2))
         
-        return Iuy, f, Iyy
+        NOFRFuyMod = np.abs(NOFRFuy)
+        NOFRFuyAng = np.angle(NOFRFuy)
+        HyeMod = np.abs(Hye)
+        HyeAng = np.angle(Hye)
+        
+        np.random.shuffle(NOFRFuyMod)
+        np.random.shuffle(NOFRFuyAng)
+        np.random.shuffle(HyeMod)
+        np.random.shuffle(HyeAng)
+        
+        NOFRFuyShuf = NOFRFuyMod*np.exp(-1j*NOFRFuyAng)
+        HyeShuf = HyeMod*np.exp(-1j*HyeAng)
+        
+        Iuyconf = np.log((np.abs(HyeShuf)**2 + np.abs(NOFRFuyShuf)**2)/(np.abs(HyeShuf+1e-7)**2))
+        Iyyconf = np.log((np.abs(HyeShuf)**2 + np.abs(NOFRFuyShuf)**2)/(np.abs(NOFRFuyShuf+1e-7)**2))
+        
+        
+        
+        return Iuy, f, Iyy, Iuyconf, Iyyconf
     
-
-
-
     
-
-
 def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
          Hnuy, Hnyu, f_inputMin, f_inputMax, maxOrder, 
          L=9, ustring='u', ystring='y', 
@@ -883,25 +895,25 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
                 yDivided[:, [j*L+i]] = y[i//2*Nsegment:(i+2)//2*Nsegment, [j]]
             
             
-        Iuyn, f, Iyyn = computeIuy(uDivided, yDivided,
+        Iuyn, f, Iyyn, Iuynconf, _ = computeIuy(uDivided, yDivided,
                                    Fs, fres, beta_uy, beta_yu, Duy, Dyu,
                                    Hnuy, Hnyu, Hnnuy, Hnnyu, f_inputMin, 
                                    f_inputMax, maxOrder=maxOrder,
                                    ustring=ustring, ystring=ystring)
         
-        Iyun, f, Iuun = computeIuy(yDivided, uDivided, 
+        Iyun, f, Iuun, Iyunconf, _ = computeIuy(yDivided, uDivided, 
                                    Fs, fres, beta_yu, beta_uy, 
                                    Dyu, Duy, Hnyu, Hnuy, Hnnyu, Hnnuy,
                                    f_inputMin, f_inputMax, maxOrder=maxOrder, 
                                    ustring=ystring, ystring=ustring)
         
-        IuynLinear, f, _ = computeIuy(uDivided, yDivided, 
+        IuynLinear, f, _, _, _ = computeIuy(uDivided, yDivided, 
                                       Fs, fres, beta_uy, beta_yu, Duy, Dyu, 
                                       Hnuy, Hnyu, Hnnuy, Hnnyu, f_inputMin, 
                                       f_inputMax, maxOrder=1, 
                                       ustring=ustring, ystring=ystring)
         
-        IyunLinear, f, _ = computeIuy(yDivided, uDivided, 
+        IyunLinear, f, _, _, _ = computeIuy(yDivided, uDivided, 
                                       Fs, fres, beta_yu, beta_uy, 
                                       Dyu, Duy, Hnyu, Hnuy, Hnnyu, Hnnuy,
                                       f_inputMin, f_inputMax, maxOrder=1, 
@@ -913,6 +925,11 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
         Iyy = np.mean(Iyyn, axis=1)
         IuyLinear = np.mean(IuynLinear, axis=1)
         IyuLinear = np.mean(IyunLinear, axis=1)
+        IuyConf = np.mean(np.abs(Iuynconf), axis=1)
+        IyuConf = np.mean(np.abs(Iyunconf), axis=1)
+        IuyConf[:] = np.quantile(IuyConf, 0.95)
+        IyuConf[:] = np.quantile(IyuConf, 0.95)
+        
         
         # NPDCuy = Iuy/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
         # NPDCyu = Iyu/np.sqrt(np.abs(Iuy)**2+np.abs(Iyu)**2+np.abs(Iuu)**2+np.abs(Iyy)**2)
@@ -926,77 +943,71 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
         
         
         
-        idu = np.random.rand(*uDivided.shape).argsort(0)
-        uDividedShuffle = uDivided[idu, np.arange(uDivided.shape[1])]
+        # idu = np.random.rand(*uDivided.shape).argsort(0)
+        # uDividedShuffle = uDivided[idu, np.arange(uDivided.shape[1])]
         
-        idy = np.random.rand(*yDivided.shape).argsort(0)
-        yDividedShuffle = yDivided[idy, np.arange(yDivided.shape[1])]
+        # idy = np.random.rand(*yDivided.shape).argsort(0)
+        # yDividedShuffle = yDivided[idy, np.arange(yDivided.shape[1])]
         
 
         
-        beta_uyShuffle, nyShuffle, DuyShuffle = ident.identifyModel(uDividedShuffle, yDividedShuffle, 0, 0, ustring=ustring,
-                                                                    ystring=ystring, nstring='n', L=1,
-                                                                    supress=True, method='mols', elsMethod='RLS', 
-                                                                    elsMaxIter=2, useStruct=Duy, mfrolsEngine=mfrolsEngine,
-                                                                    elsEngine=elsEngine)
+        # beta_uyShuffle, nyShuffle, DuyShuffle = ident.identifyModel(uDividedShuffle, yDividedShuffle, 0, 0, ustring=ustring,
+        #                                                             ystring=ystring, nstring='n', L=1,
+        #                                                             supress=True, method='mols', elsMethod='RLS', 
+        #                                                             elsMaxIter=2, useStruct=Duy, mfrolsEngine=mfrolsEngine,
+        #                                                             elsEngine=elsEngine)
         
-        beta_yuShuffle, nuShuffle, DyuShuffle = ident.identifyModel(yDividedShuffle, uDividedShuffle, 0, 0, 
-                                                                    ustring=ystring, ystring=ustring, nstring='m', L=1, 
-                                                                    supress=True, method='mols', elsMethod='RLS', 
-                                                                    elsMaxIter=2, useStruct=Dyu)
+        # beta_yuShuffle, nuShuffle, DyuShuffle = ident.identifyModel(yDividedShuffle, uDividedShuffle, 0, 0, 
+        #                                                             ustring=ystring, ystring=ustring, nstring='m', L=1, 
+        #                                                             supress=True, method='mols', elsMethod='RLS', 
+        #                                                             elsMaxIter=2, useStruct=Dyu)
         
-        HnuyShuffle = computeSystemGFRF(DuyShuffle, Fs, beta_uyShuffle, maxOrder, ustring=ustring, ystring=ystring)
-        HnyuShuffle = computeSystemGFRF(DyuShuffle, Fs, beta_yuShuffle, maxOrder, ustring=ystring, ystring=ustring)
+        # HnuyShuffle = computeSystemGFRF(DuyShuffle, Fs, beta_uyShuffle, maxOrder, ustring=ustring, ystring=ystring)
+        # HnyuShuffle = computeSystemGFRF(DyuShuffle, Fs, beta_yuShuffle, maxOrder, ustring=ystring, ystring=ustring)
         
-        beta_nuyShuffle, DnuyShuffle = findNoiseModel(beta_uyShuffle, DuyShuffle, ustring=ustring,
-                                                      ystring=ystring, nstring='e')
+        # beta_nuyShuffle, DnuyShuffle = findNoiseModel(beta_uyShuffle, DuyShuffle, ustring=ustring,
+        #                                               ystring=ystring, nstring='e')
         
-        HnnuyShuffle = computeSystemGFRF(DuyShuffle, Fs, beta_uyShuffle, maxOrder,
-                                         ustring=ustring, ystring=ystring,
-                                         noiseFlag=True)
+        # HnnuyShuffle = computeSystemGFRF(DuyShuffle, Fs, beta_uyShuffle, maxOrder,
+        #                                  ustring=ustring, ystring=ystring,
+        #                                  noiseFlag=True)
         
-        beta_nyuShuffle, DnyuShuffle = findNoiseModel(beta_yuShuffle, DyuShuffle, ustring=ystring,
-                                                      ystring=ustring, nstring='f')
+        # beta_nyuShuffle, DnyuShuffle = findNoiseModel(beta_yuShuffle, DyuShuffle, ustring=ystring,
+        #                                               ystring=ustring, nstring='f')
         
-        HnnyuShuffle = computeSystemGFRF(DyuShuffle, Fs, beta_yuShuffle, maxOrder,
-                                         ustring=ystring, ystring=ustring,
-                                         noiseFlag=True)
+        # HnnyuShuffle = computeSystemGFRF(DyuShuffle, Fs, beta_yuShuffle, maxOrder,
+        #                                  ustring=ystring, ystring=ustring,
+        #                                  noiseFlag=True)
         
-        Nsegment = len(u)//(L//2 + 1)
+        # Nsegment = len(u)//(L//2 + 1)
         
-        IuynConf, f, IyynConf = computeIuy(uDividedShuffle, yDividedShuffle,
-                                           Fs, fres, beta_uyShuffle, beta_yuShuffle, DuyShuffle, DyuShuffle,
-                                           HnuyShuffle, HnyuShuffle, HnnuyShuffle, HnnyuShuffle, f_inputMin, 
-                                           f_inputMax, maxOrder=maxOrder,
-                                           ustring=ustring, ystring=ystring)
+        # IuynConf, f, IyynConf = computeIuy(uDividedShuffle, yDividedShuffle,
+        #                                    Fs, fres, beta_uyShuffle, beta_yuShuffle, DuyShuffle, DyuShuffle,
+        #                                    HnuyShuffle, HnyuShuffle, HnnuyShuffle, HnnyuShuffle, f_inputMin, 
+        #                                    f_inputMax, maxOrder=maxOrder,
+        #                                    ustring=ustring, ystring=ystring)
         
-        IyunConf, f, IuunConf = computeIuy(yDividedShuffle, uDividedShuffle, 
-                                           Fs, fres, beta_yuShuffle, beta_uyShuffle, 
-                                           DyuShuffle, DuyShuffle, HnyuShuffle, HnuyShuffle, 
-                                           HnnyuShuffle, HnnuyShuffle,
-                                           f_inputMin, f_inputMax, maxOrder=maxOrder, 
-                                           ustring=ystring, ystring=ustring)
+        # IyunConf, f, IuunConf = computeIuy(yDividedShuffle, uDividedShuffle, 
+        #                                    Fs, fres, beta_yuShuffle, beta_uyShuffle, 
+        #                                    DyuShuffle, DuyShuffle, HnyuShuffle, HnuyShuffle, 
+        #                                    HnnyuShuffle, HnnuyShuffle,
+        #                                    f_inputMin, f_inputMax, maxOrder=maxOrder, 
+        #                                    ustring=ystring, ystring=ustring)
         
         
-        # plt.figure()
-        # plt.hist(np.max(IuynConf, axis=0), 10)
-        # plt.show()
+        # # plt.figure()
+        # # plt.hist(np.max(IuynConf, axis=0), 10)
+        # # plt.show()
         
-        # plt.figure()
-        # plt.hist(np.max(IyunConf, axis=0), 10)
-        # plt.show()
+        # # plt.figure()
+        # # plt.hist(np.max(IyunConf, axis=0), 10)
+        # # plt.show()
         
-        # IuyConf = np.percentile(np.abs(IuynConf), 50)
-        # IyuConf = np.percentile(np.abs(IyunConf), 50)
-        IuyConf = np.abs(IuynConf.mean(axis=1))
-        IyuConf = np.abs(IyunConf.mean(axis=1))
+        # # IuyConf = np.percentile(np.abs(IuynConf), 50)
+        # # IyuConf = np.percentile(np.abs(IyunConf), 50)
+        # IuyConf = np.abs(IuynConf.mean(axis=1))
+        # IyuConf = np.abs(IyunConf.mean(axis=1))
         
-        Iuy = np.mean(Iuyn, axis=1)
-        Iyu = np.mean(Iyun, axis=1)
-        Iuu = np.mean(Iuun, axis=1)
-        Iyy = np.mean(Iyyn, axis=1)
-        IuyLinear = np.mean(IuynLinear, axis=1)
-        IyuLinear = np.mean(IyunLinear, axis=1)
         
         
         return Iuy, Iyu, f, Iuyn, Iyun, IuyLinear, IyuLinear, IuynLinear, IyunLinear, IuyConf, IyuConf

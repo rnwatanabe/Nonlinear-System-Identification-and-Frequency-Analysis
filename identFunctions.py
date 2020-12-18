@@ -888,44 +888,47 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
             K = pmols.shape[2]
             beta_uy, _ = frolsfunctions.frolsfunctions.mols(pmols, ymols, pmols.shape[0], M, K)
         
-    
-    if elsMethod != 'mfrols':
-       indicesToRemove = []
-       for i in range(len(beta_uy)):
-           if beta_uy[i] == 0:
-               indicesToRemove.append(i)
-       D = np.delete(D, indicesToRemove)
-    
-    maxLagn = findMaxLagFromStruct(D)
-    degree = findDegreeFromStruct(D)
-    
-    ny = np.zeros((u.shape[0]-maxLagn, u.shape[1]))
-       
-    _, Dn = pNoiseMatrix(u[maxLagn:,[0]], y[maxLagn:,[0]], ny[:,[0]], maxLagn, 
-                         maxLagn, maxLagn, ustring=ustring, ystring=ystring,
-                         nstring=nstring, delay=1, degree=degree, 
-                         constantTerm=False)
-    del p  
-    gc.collect()
-    i
-    Dels = np.hstack((D, Dn))
-    if not supress: 
-            print('Initiating ELS method')
-    beta_uy_ELS, _, nELS, _ = elsWithStruct(u[maxLagn:,:], y[maxLagn:,:], ny, Dels,
-                                            maxIter=elsMaxIter, ustring=ustring, 
-                                            ystring=ystring, nstring=nstring, 
-                                            supress=supress, pho=pho, L=L,
-                                            method=elsMethod, Nmax=u.shape[0],
-                                            elsEngine=elsEngine)
-    gc.collect()
-    beta_uy = beta_uy_ELS[0:len(D)]
+    if elsMethod != 'No':
+        if elsMethod != 'mfrols':
+           indicesToRemove = []
+           for i in range(len(beta_uy)):
+               if beta_uy[i] == 0:
+                   indicesToRemove.append(i)
+           D = np.delete(D, indicesToRemove)
+        
+        maxLagn = findMaxLagFromStruct(D)
+        degree = findDegreeFromStruct(D)
+        
+        ny = np.zeros((u.shape[0]-maxLagn, u.shape[1]))
+           
+        _, Dn = pNoiseMatrix(u[maxLagn:,[0]], y[maxLagn:,[0]], ny[:,[0]], maxLagn, 
+                             maxLagn, maxLagn, ustring=ustring, ystring=ystring,
+                             nstring=nstring, delay=1, degree=degree, 
+                             constantTerm=False)
+        del p  
+        gc.collect()
+        i
+        Dels = np.hstack((D, Dn))
+        if not supress: 
+                print('Initiating ELS method')
+        beta_uy_ELS, _, nELS, _ = elsWithStruct(u[maxLagn:,:], y[maxLagn:,:], ny, Dels,
+                                                maxIter=elsMaxIter, ustring=ustring, 
+                                                ystring=ystring, nstring=nstring, 
+                                                supress=supress, pho=pho, L=L,
+                                                method=elsMethod, Nmax=u.shape[0],
+                                                elsEngine=elsEngine)
+        gc.collect()
+        beta_uy = beta_uy_ELS[0:len(D)]
+        ny = nELS
+    else:
+        ny = 0
     
     print('\n')
     for i in range(len(D)):
         if beta_uy[i,0] != 0: print(D[i], beta_uy[i,0])
         
     
-    ny = nELS
+    
     print('\n')
     return beta_uy, ny, D
 
