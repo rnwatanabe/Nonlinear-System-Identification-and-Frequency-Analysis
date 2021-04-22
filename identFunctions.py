@@ -142,7 +142,7 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
             
             gs[:, [m]] = (np.sum(y*qs[:, m, :], axis=0, keepdims=True)/(np.sum(qs[:, m, :]*qs[:, m, :], axis=0, keepdims=True) + 1e-6)).T
             
-            ERR[:, m] = (gs[:, m]**2*np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)/sigma)
+            ERR[:, m] = (gs[:, m]**2*np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)/(sigma+1e-6))
             
 
 
@@ -170,6 +170,146 @@ def mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=False):
         del qs
         del gs
         beta, l, M0 = mfrols(p, y, pho, s, ESR, l, err, A, q, g, verbose=verbose)
+    else:
+        if verbose:
+            print('term number', s)
+            print('ERR', err[s])
+            print(l[:s+1])
+        s += 1  
+        M0 = s              
+        beta = np.empty((M0, L))
+        for j in range(L):
+            if s > 1:
+                beta[:, j] = np.linalg.inv(np.squeeze(A[0:M0, 0:M0, j]))@np.transpose(g[j, 0:M0])
+            else:
+                beta[:, j] = (np.squeeze(A[0:M0, 0:M0,j])**-1)*g[j, 0:M0]
+    return beta, l, M0
+
+def mfrols_val(p, y, u, val, s, ESR, l, err, A, q, g, verbose=False):
+    '''
+    Implements the MFROLS algorithm (see page 97 from Billings, SA (2013)).
+        written by: Renato Naville Watanabe
+        beta = mfrols(p, y, pho, s)
+        Inputs:
+          p: matrix of np.float64s, is the matrix of candidate terms.
+          y: vector of np.float64s, output signal.
+          val: np.float64, stop criteria. Percentage of tests admited to fail.
+          s: integer, iteration step of the mfrols algorithm.
+          l: vector of integers, indices of the chosen terms.M = np.shape(p)[1]; l = -1*np.ones((M))
+          err: vector of np.float64s, the error reduction ratio of each chosen term. err = np.zeros((M))
+          ESR: np.float64, the sum of the individual error reduction ratios. Initial value eual 1.
+          A: matrix of np.float64s, auxiliary matrix in the orthogonalization process.
+                  A = np.zeros((M,M,1))
+          q: matrix of np.float64s, matrix with each column being the terms orthogonalized
+                  by the Gram-Schmidt process. q = np.zeros_like(p)
+          g: vector of np.float64s, auxiliary vector in the orthogonalization process.
+                  g = np.zeros((1,M))
+        Output:
+          beta: vector of np.float64s, coefficients of the chosen terms.
+          l: vector of integers, indices of the chosen terms
+          M0: number of chosen terms
+    '''
+    def compute_fails():
+        r = np.arange(s)
+        A[r, s, :] = np.sum(q[:, r, :]*p[:, [int(l[s])], :], axis=0)/(np.sum(q[:, r, :]*q[:, r, :], axis=0)+1e-6)
+        A[s, s, :] = 1.0
+        q[:, s, :] = qs[:, int(l[s]), :]
+        g[:, s] = gs[:, int(l[s])]
+    
+        
+        xi = np.zeros((p.shape[0], L))
+        beta = np.empty((p.shape[1], L))
+        ## recursive call
+        
+        for j in range(L):
+            if s > 0:
+                beta[l[0:s+1], j] = np.linalg.inv(np.squeeze(A[0:s+1, 0:s+1, j]))@np.transpose(g[j, 0:s+1])
+            else:
+                beta[l[0:s+1], j] = (np.squeeze(A[0:s+1, 0:s+1,j])**-1)*g[j, 0:s+1]
+            xi[:, j] = y[:, j] - p[:,:,j]@beta[:,j]
+        
+        
+        fail1, fail2, fail3, fail4, fail5 = validation(u, xi, plot=False)
+        return len(fail1) + len(fail2) + len(fail3) + len(fail4) + len(fail5)
+    
+    if np.ndim(p) == 2:
+        pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1))
+        pTemp[:, :, 0] = p
+        p = pTemp
+        M = p.shape[1]
+        l = -1*np.ones((M))
+        err = np.zeros((M))
+        A = np.zeros((M, M, 1))
+        q = np.zeros_like(p)
+        g = np.zeros((1, M))
+
+    if np.ndim(y) == 1:
+        yTemp = np.zeros((np.shape(y)[0], 1))
+        yTemp[:, 0] = y
+        y = yTemp
+
+    M = p.shape[1]
+    L = p.shape[2]
+    gs = np.zeros((L, M))
+    ERR = np.zeros((L, M))
+    qs = np.copy(p)
+    
+    sigma = np.sum(y**2, axis=0)
+    
+    for m in range(M):
+        if np.all(m!=l):
+            ## The Gram-Schmidt method was implemented in a modified way,
+            ## as shown in Rice, JR(1966)                
+            for r in range(s):
+                qs[:, [m], :] = qs[:, [m], :] - (np.sum(q[:, [r], :]*qs[:, [m], :], axis=0, keepdims=True)
+                                                 /(np.sum(q[:, [r], :]*q[:, [r], :], axis=0, keepdims=True) + 1e-6)*q[:, [r], :])
+            
+            gs[:, [m]] = (np.sum(y*qs[:, m, :], axis=0, keepdims=True)/(np.sum(qs[:, m, :]*qs[:, m, :], axis=0, keepdims=True) + 1e-6)).T
+            
+            ERR[:, m] = compute_fails()
+            # ERR[:, m] = (gs[:, m]**2*np.sum(qs[:, [m], :]*qs[:, [m], :], axis=0)/(sigma+1e-6))
+            
+
+
+    ERR_m = np.mean(ERR, axis=0)
+        
+    l[s] = np.where(ERR_m==np.nanmax(ERR_m))[0][0]
+    err[s] = ERR_m[int(l[s])]
+    
+    r = np.arange(s)
+    A[r, s, :] = np.sum(q[:, r, :]*p[:, [int(l[s])], :], axis=0)/(np.sum(q[:, r, :]*q[:, r, :], axis=0)+1e-6)
+    A[s, s, :] = 1.0
+    q[:, s, :] = qs[:, int(l[s]), :]
+    g[:, s] = gs[:, int(l[s])]
+
+    ESR = ESR - err[s]   
+    
+    xi = np.zeros((p.shape[0], L))
+    beta = np.empty((p.shape[1], L))
+    ## recursive call
+    
+    for j in range(L):
+        if s > 0:
+            beta[l[0:s+1], j] = np.linalg.inv(np.squeeze(A[0:s+1, 0:s+1, j]))@np.transpose(g[j, 0:s+1])
+        else:
+            beta[l[0:s+1], j] = (np.squeeze(A[0:s+1, 0:s+1,j])**-1)*g[j, 0:s+1]
+        xi[:, j] = y[:, j] - p[:,:,j]@beta[:,j]
+    
+    
+    fail1, fail2, fail3, fail4, fail5 = validation(u, xi, plot=False)
+    
+    
+    if ((len(fail1)/L>=val or len(fail2)/L>=val or
+         len(fail3)/L>=val or len(fail4)/L>=val or
+         len(fail5)/L>=val) and s<M-1):
+        if verbose:
+            print('term number', s)
+            print('ERR', err[s])
+            print(l[:s+1])
+        s += 1
+        del qs
+        del gs
+        beta, l, M0 = mfrols_val(p, y, u, val, s, ESR, l, err, A, q, g, verbose=verbose)
     else:
         if verbose:
             print('term number', s)
@@ -229,7 +369,7 @@ def crosscorr(x,y, alpha = 0.05):
     lags = lags - N//2
     return phi, lags, CB
 
-def validation(u, xi, D, ustring='u', ystring='y'):
+def validation(u, xi, ustring='u', ystring='y', plot=True, linear=False):
     '''
      Runs the tests form Eq. 5.13 in Billings (2013).
      
@@ -252,13 +392,13 @@ def validation(u, xi, D, ustring='u', ystring='y'):
     import numpy as np
     import matplotlib.pyplot as plt
     
-    
+    if u.ndim == 1: u = u.reshape(-1,1)
     trials = u.shape[1]  
     
-    maxLag = findMaxLagFromStruct(D)
-    
+    maxLag = u.shape[0] - xi.shape[0]
     u = u[maxLag:,:]
     u = u - np.mean(u, axis=0, keepdims=True)
+    
     xi = xi - np.mean(xi, axis=0, keepdims=True)
     phi_xixi = np.zeros((u.shape[0], u.shape[1]))
     phi_uxi = np.zeros((u.shape[0], u.shape[1]))
@@ -269,10 +409,10 @@ def validation(u, xi, D, ustring='u', ystring='y'):
     CB2 = 0
     CB3 = 0
     CB4 = 0
-    CB5 = 0
+    CB5 = 0   
     
-    for i in range(trials):
-        xiu = xi[0:-1, i]*u[0:-1, i]
+    for i in range(trials):        
+        xiu = xi[0:-1, i]*u[0:-1, i]        
         u2 = u[:,i]**2 - np.mean(u[:,i]**2)
         phi_xixi[:, i], lags, CB1new = crosscorr(xi[:,i], xi[:,i], 0.1)
         if np.max(np.abs(CB1new)) > CB1: CB1 = np.max(np.abs(CB1new))
@@ -284,57 +424,68 @@ def validation(u, xi, D, ustring='u', ystring='y'):
         if np.max(np.abs(CB4new)) > CB4: CB4 = np.max(np.abs(CB4new))
         phi_u2xi2[:, i], lags, CB5new = crosscorr(u2,xi[:,i]**2, 0.1)
         if np.max(np.abs(CB5new)) > CB5: CB5 = np.max(np.abs(CB5new))
-        
-    plt.figure()
-    plt.title(['Validation Tests - trial ', i])
-    plt.subplot(5, 1, 1)
-    plt.plot(lags, phi_xixi)
-    plt.plot(lags, np.mean(phi_xixi, axis=1), '-k', linewidth=4) 
-    plt.plot(lags, -CB1*np.ones_like(lags), '--b', lags, CB1*np.ones_like(lags), '--b')
-    plt.ylabel(r'$\Phi_{\xi_'+ ystring +'\\xi_'+ ystring +'}$')
-    plt.xlim(-3*maxLag, 3*maxLag)
-    plt.ylim(-1, 1)
-    plt.subplot(5, 1, 2)        
-    plt.plot(lags, phi_uxi)
-    plt.plot(lags, np.mean(phi_uxi, axis=1), '-k', linewidth=4)
-    plt.plot(lags, -CB2*np.ones_like(lags), '--b', lags, CB2*np.ones_like(lags), '--b')
-    plt.ylabel(r'$\Phi_{' + ustring + '\\xi_'+ ystring+'}$')
-    plt.xlim(-3*maxLag, -1)
-    plt.ylim(-1, 1)
-    plt.subplot(5, 1, 3)
-    plt.plot(lags1, phi_xixiu)
-    plt.plot(lags1, np.mean(phi_xixiu, axis=1), '-k', linewidth=4)
-    plt.plot(lags1, -CB3*np.ones_like(lags1), '--b', lags1, CB3*np.ones_like(lags1), '--b')
-    plt.ylabel(r'$\Phi_{\xi_' + ystring + '(\\xi_' + ystring + ustring + ')}$')
-    plt.xlim(0, 3*maxLag)
-    plt.ylim(-1, 1)
-    plt.subplot(5, 1, 4)
-    plt.plot(lags, phi_u2xi)
-    plt.plot(lags, np.mean(phi_u2xi, axis=1), '-k', linewidth=4)
-    plt.plot(lags, -CB4*np.ones_like(lags), '--b', lags, CB4*np.ones_like(lags), '--b')
-    plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring +'}$')
-    plt.ylim(-1, 1)
-    plt.xlim(-3*maxLag, 3*maxLag)
-    plt.subplot(5, 1, 5)
-    plt.plot(lags, phi_u2xi2)
-    plt.plot(lags, np.mean(phi_u2xi2, axis=1), '-k', linewidth=4)
-    plt.plot(lags, -CB5*np.ones_like(lags), '--b', lags, CB5*np.ones_like(lags), '--b')
-    plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring + '^2}$')
-    plt.ylim(-1, 1)
-    plt.xlim(-3*maxLag, 3*maxLag)
-    plt.subplots_adjust(hspace=0.5)
-    plt.show()
     
-    failedTrials = np.array([]).reshape(-1,1)
+    if plot:
+        plt.figure()
+        plt.title(['Validation Tests - trial ', i])
+        plt.subplot(5, 1, 1)
+        plt.plot(lags, phi_xixi)
+        plt.plot(lags, np.mean(phi_xixi, axis=1), '-k', linewidth=4) 
+        plt.plot(lags, -CB1*np.ones_like(lags), '--b', lags, CB1*np.ones_like(lags), '--b')
+        plt.ylabel(r'$\Phi_{\xi_'+ ystring +'\\xi_'+ ystring +'}$')
+        plt.xlim(-3*maxLag, 3*maxLag)
+        plt.ylim(-1, 1)
+        plt.subplot(5, 1, 2)        
+        plt.plot(lags, phi_uxi)
+        plt.plot(lags, np.mean(phi_uxi, axis=1), '-k', linewidth=4)
+        plt.plot(lags, -CB2*np.ones_like(lags), '--b', lags, CB2*np.ones_like(lags), '--b')
+        plt.ylabel(r'$\Phi_{' + ustring + '\\xi_'+ ystring+'}$')
+        plt.xlim(-3*maxLag, -1)
+        plt.ylim(-1, 1)
+        plt.subplot(5, 1, 3)
+        plt.plot(lags1, phi_xixiu)
+        plt.plot(lags1, np.mean(phi_xixiu, axis=1), '-k', linewidth=4)
+        plt.plot(lags1, -CB3*np.ones_like(lags1), '--b', lags1, CB3*np.ones_like(lags1), '--b')
+        plt.ylabel(r'$\Phi_{\xi_' + ystring + '(\\xi_' + ystring + ustring + ')}$')
+        plt.xlim(0, 3*maxLag)
+        plt.ylim(-1, 1)
+        plt.subplot(5, 1, 4)
+        plt.plot(lags, phi_u2xi)
+        plt.plot(lags, np.mean(phi_u2xi, axis=1), '-k', linewidth=4)
+        plt.plot(lags, -CB4*np.ones_like(lags), '--b', lags, CB4*np.ones_like(lags), '--b')
+        plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring +'}$')
+        plt.ylim(-1, 1)
+        plt.xlim(-3*maxLag, 3*maxLag)
+        plt.subplot(5, 1, 5)
+        plt.plot(lags, phi_u2xi2)
+        plt.plot(lags, np.mean(phi_u2xi2, axis=1), '-k', linewidth=4)
+        plt.plot(lags, -CB5*np.ones_like(lags), '--b', lags, CB5*np.ones_like(lags), '--b')
+        plt.ylabel(r'$\Phi_{(' + ustring + '^2)\\xi_' + ystring + '^2}$')
+        plt.ylim(-1, 1)
+        plt.xlim(-3*maxLag, 3*maxLag)
+        plt.subplots_adjust(hspace=0.5)
+        plt.show()
+    
+
+    failedTrials1 = np.array([]).reshape(-1,1)
+    failedTrials2 = np.array([]).reshape(-1,1)
+    failedTrials3 = np.array([]).reshape(-1,1)
+    failedTrials4 = np.array([]).reshape(-1,1)
+    failedTrials5 = np.array([]).reshape(-1,1)
     for i in range(trials):
-        if (np.any(np.abs(phi_u2xi2[np.abs(lags)<3*maxLag, i])>CB5) 
-            or np.any(np.abs(phi_u2xi[np.abs(lags)<3*maxLag, i])>CB4)
-            or np.any(np.abs(phi_xixiu[np.logical_and(np.abs(lags1) < 0,np.abs(lags1) < 3*maxLag), i])>CB3)
-            or np.any(np.abs(phi_uxi[np.logical_and(lags<0, np.abs(lags)<3*maxLag), i])>CB2)
-            or np.any(np.abs(phi_xixi[np.logical_and(lags!=0, np.abs(lags)<3*maxLag), i])>CB1)):
-            failedTrials = np.vstack((failedTrials, np.array([i])))
+        
+        if np.any(np.abs(phi_u2xi2[np.abs(lags)<3*maxLag, i])>CB5): 
+            failedTrials5 = np.vstack((failedTrials5, np.array([i])))
+        if np.any(np.abs(phi_u2xi[np.abs(lags)<3*maxLag, i])>CB4):
+            failedTrials4 = np.vstack((failedTrials4, np.array([i])))
+        if np.any(np.abs(phi_xixiu[np.logical_and(np.abs(lags1) < 0,np.abs(lags1) < 3*maxLag), i])>CB3):
+            failedTrials3 = np.vstack((failedTrials3, np.array([i])))
+        if np.any(np.abs(phi_uxi[np.logical_and(lags<0, np.abs(lags)<3*maxLag), i])>CB2):
+            failedTrials2 = np.vstack((failedTrials2, np.array([i])))
+        if np.any(np.abs(phi_xixi[np.logical_and(lags!=0, np.abs(lags)<3*maxLag), i])>CB1):
+            failedTrials1 = np.vstack((failedTrials1, np.array([i])))
     
-    return failedTrials
+    return failedTrials1, failedTrials2, failedTrials3, failedTrials4, failedTrials5
     
     
 def validationTimeSeries(xi, maxLag):
@@ -581,15 +732,16 @@ def pNoiseMatrix(u,y,n, maxLagu, maxLagy, maxLagNoise,
             if multindD[j].find(nstring) == -1:
                 indToRemove = np.vstack((indToRemove, j))
         multindD = np.delete(multindD, indToRemove)
+        
         if i == 1:
             p, _, _ = pMatrixFromStruct(u, y, n, multindD, ustring=ustring, 
                                         ystring = ystring)
             D = multindD
+            
         else:
             pNew, _, _ = pMatrixFromStruct(u, y, n, multindD, ustring=ustring, 
                                            ystring = ystring)
-            print(D)
-            print(multindD)
+            
             p = np.hstack((p, pNew))
             
             D = np.hstack((D, multindD))
@@ -683,6 +835,66 @@ def executeMFrols(p, y, pho, D, L=1, supress=False, mfrolsEngine='python'):
 
     beta = betatemp
     return beta
+
+def executeMFrolsVal(p, y, u, val, L=1, supress=False, mfrolsEngine='python'):
+    import sys
+    sys.path.insert(1, '/home/rnwatanabe/Dropbox/Nonlinear-System-Identification-and-Frequency-Analysis/')
+    import frolsfunctions
+    import gc
+    
+    p, y = reshapepymatrices(p, y, L)    
+    s = 0
+    ESR = 1.0
+    l = -1*np.ones((p.shape[1]), dtype=np.int32, order='F')
+    err = np.zeros((p.shape[1]), dtype=np.float64, order='F')
+    A = np.zeros((p.shape[1], p.shape[1], p.shape[2]), dtype=np.float64, order='F')
+    q = np.zeros_like(p)
+    g = np.zeros((p.shape[2], p.shape[1]), dtype=np.float64, order='F')
+    
+    gc.collect()
+    
+    if mfrolsEngine == 'python':
+        beta, l, M0 = mfrols_val(p, y, u, val, s, ESR, l, err, A, q, g, verbose= not supress)
+    if mfrolsEngine == 'fortran':
+        pass
+        ## TODO
+#         if np.ndim(p) == 2:
+#             pTemp = np.zeros((np.shape(p)[0], np.shape(p)[1], 1), dtype=np.float64, order='F')
+#             pTemp[:, :, 0] = p
+#             p = pTemp
+#             M = p.shape[1]
+#             l = -1*np.ones((M), dtype=np.int32, order='F')
+#             err = np.zeros((M), dtype=np.float64, order='F')
+#             A = np.zeros((M, M, 1), dtype=np.float64, order='F')
+            
+#             g = np.zeros((1, M), dtype=np.float64, order='F')
+    
+#         if np.ndim(y) == 1:
+#             yTemp = np.zeros((np.shape(y)[0], 1))
+#             yTemp[:, 0] = y
+#             y = yTemp
+#         s = 1
+#         M = p.shape[1]
+#         K = p.shape[2]
+#         beta = np.zeros((M, K), np.float64, order='F')
+#         M0 = 0
+#         qs = np.copy(p)
+        
+#         beta, M0 = frolsfunctions.frolsfunctions.mfrols(p, y, pho, s, ESR, l, err, 
+#                                                         A, qs, g, not supress, 
+#                                                         p.shape[0], M, K)
+#         l = l - 1
+#         beta = beta[0:M0,:]
+
+    betatemp = np.zeros((p.shape[1],1))
+    
+    for i in range(M0):
+        if (not supress): print(D[int(l[i])], np.mean(beta[i,:]))
+        betatemp[int(l[i])] = np.mean(beta[i,:])
+
+    beta = betatemp
+    return beta
+
 
 def matmulStacked(a, b):
     
@@ -835,7 +1047,7 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
 
 def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
                   ystring='y', nstring='n', delay=0, degree=1, L=5,
-                  constantTerm=True, pho = 0.01, supress=False,
+                  constantTerm=True, pho = 0.01, val=0.1, supress=False,
                   method='mfrols', elsMethod='mols', elsMaxIter=10,
                   useStruct=[], mfrolsEngine='python', elsEngine='python'):
     
@@ -877,6 +1089,13 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
             print('Executing MFROLS method')
         beta_uy = executeMFrols(p, y[max(maxLagu, maxLagy):,:], pho, D, L=L, 
                                 supress=supress, mfrolsEngine=mfrolsEngine)
+        
+    if method == 'mfrolsval':
+        if not supress: 
+            print('Executing MFROLS method')
+        beta_uy = executeMFrolsVal(p, y[max(maxLagu, maxLagy):,:], u, val, L=L, 
+                                supress=supress, mfrolsEngine=mfrolsEngine)
+        
     if method == 'mols':
         if not supress: 
             print('Executing MOLS method')
@@ -923,13 +1142,12 @@ def identifyModel(u, y, maxLagu, maxLagy, ustring='u',
     else:
         ny = 0
     
-    print('\n')
-    for i in range(len(D)):
-        if beta_uy[i,0] != 0: print(D[i], beta_uy[i,0])
-        
     
-    
-    print('\n')
+    if not supress:
+        print('\n')
+        for i in range(len(D)):
+            if beta_uy[i,0] != 0: print(D[i], beta_uy[i,0])
+        print('\n')
     return beta_uy, ny, D
 
 def selectFeatures(features, target, featureNames, L=1,

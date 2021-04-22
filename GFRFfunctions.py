@@ -8,6 +8,37 @@ Created on Mon Aug  5 10:01:24 2019
 
 import numpy as np
 
+def nonRepeatedRandomInt(low, upper, N):
+        import numpy as np
+        import random
+        
+        numbers = np.arange(low, upper, 1)
+        random.shuffle(numbers)
+        shuffleNumbers = np.array(numbers)[0:int(N)]
+                
+        return shuffleNumbers
+
+def shuffleArray(X):
+    Xshuf  = np.zeros_like(X)
+    for i in range(X.shape[1]):
+        Xshuf[:,i] = X[nonRepeatedRandomInt(0, X.shape[0], X.shape[0]),i]
+    return Xshuf
+
+def shuffleSpectrum(H):
+    
+    HMod = np.abs(H)
+    HAng = np.angle(H)
+    
+    
+    HMod = shuffleArray(HMod)
+    HAng = shuffleArray(HAng)
+    
+    
+    HShuf = HMod*np.exp(-1j*HAng)
+    
+    return HShuf
+    
+
 
 def computeSystemGFRF(Da, Fs, a, degree, ustring='u', ystring='y', noiseFlag=False):
     '''        
@@ -285,7 +316,7 @@ def buildHn(order, C, fs, maxLag, noiseFlag=False):
                     if len(c_01) >= globals()['l1']:
                         exec('globals()["numH"] = globals()["numH"] + c_01[' + lvector[order] + '] * sym.exp(-sym.I*globals()["l1"]*2*sym.pi*globals()["f1"]/fs)')
                    
-                if 'c_01' in locals():
+                if 'c_10' in locals():
                     if len(c_10) >= globals()['l1']:                        
                         exec('globals()["denH"] = globals()["denH"] - c_10['+lvector[order]+']*sym.exp(-sym.I*l1*2*sym.pi*globals()["f1"]/fs)')
             
@@ -307,7 +338,7 @@ def buildHn(order, C, fs, maxLag, noiseFlag=False):
             # Compute the Hn,p with n=order and p=2,..., n
             
             for p in range(2, n+1):
-                print('n=', n, ', p = ', p)
+                
                 for j in range(1, p+1):
                     if j == 1:
                         lagsPvector = 'globals()["lag' + str(j) + '"]'
@@ -421,9 +452,7 @@ def buildHn(order, C, fs, maxLag, noiseFlag=False):
                                         lPvector = lPvector + ',(globals()["lag' + str(j) + '"], globals()["l' + str(j) + '"][k])'
                                 lPvector = lPvector + '])'   
                                     
-                                print(n)
-                                exec('print(locals()["c_'+ str(p) + '0"])')
-                                exec('print(globals()["Hnn"])')
+                                
                                 exec('globals()["outputComponent"] = globals()["outputComponent"] + c_' + str(p) + '0[' + lNvector + ']*globals()["Hnn"][(n,p)]'+lPvector)
                           
             # computation of the denominator of the GFRF
@@ -836,21 +865,13 @@ def computeIuy(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
         f = f[freq]
        
                 
-        Iuy = np.log((np.abs(Hye)**2 + np.abs(NOFRFuy)**2)/(np.abs(Hye+1e-7)**2))
-        Iyy = np.log((np.abs(Hye)**2 + np.abs(NOFRFuy)**2)/(np.abs(NOFRFuy+1e-7)**2))
+        Iuy = np.log((np.abs(np.mean(Hye, axis=1))**2 + np.abs(np.mean(NOFRFuy, axis=1))**2)/(np.abs(np.mean(Hye, axis=1) + 1e-7)**2))
+        Iyy = np.log((np.abs(np.mean(Hye, axis=1))**2 + np.abs(np.mean(NOFRFuy, axis=1))**2)/(np.abs(np.mean(NOFRFuy, axis=1) + 1e-7)**2))
         
-        NOFRFuyMod = np.abs(NOFRFuy)
-        NOFRFuyAng = np.angle(NOFRFuy)
-        HyeMod = np.abs(Hye)
-        HyeAng = np.angle(Hye)
         
-        np.random.shuffle(NOFRFuyMod)
-        np.random.shuffle(NOFRFuyAng)
-        np.random.shuffle(HyeMod)
-        np.random.shuffle(HyeAng)
         
-        NOFRFuyShuf = NOFRFuyMod*np.exp(-1j*NOFRFuyAng)
-        HyeShuf = HyeMod*np.exp(-1j*HyeAng)
+        NOFRFuyShuf = np.mean(shuffleSpectrum(NOFRFuy), axis=1)
+        HyeShuf = np.mean(shuffleSpectrum(Hye), axis=1)
         
         Iuyconf = np.log((np.abs(HyeShuf)**2 + np.abs(NOFRFuyShuf)**2)/(np.abs(HyeShuf+1e-7)**2))
         Iyyconf = np.log((np.abs(HyeShuf)**2 + np.abs(NOFRFuyShuf)**2)/(np.abs(NOFRFuyShuf+1e-7)**2))
@@ -895,38 +916,32 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
                 yDivided[:, [j*L+i]] = y[i//2*Nsegment:(i+2)//2*Nsegment, [j]]
             
             
-        Iuyn, f, Iyyn, Iuynconf, _ = computeIuy(uDivided, yDivided,
+        Iuy, f, Iyy, _, _ = computeIuy(uDivided, yDivided,
                                    Fs, fres, beta_uy, beta_yu, Duy, Dyu,
                                    Hnuy, Hnyu, Hnnuy, Hnnyu, f_inputMin, 
                                    f_inputMax, maxOrder=maxOrder,
                                    ustring=ustring, ystring=ystring)
         
-        Iyun, f, Iuun, Iyunconf, _ = computeIuy(yDivided, uDivided, 
+        Iyu, f, Iuu, _, _ = computeIuy(yDivided, uDivided, 
                                    Fs, fres, beta_yu, beta_uy, 
                                    Dyu, Duy, Hnyu, Hnuy, Hnnyu, Hnnuy,
                                    f_inputMin, f_inputMax, maxOrder=maxOrder, 
                                    ustring=ystring, ystring=ustring)
         
-        IuynLinear, f, _, _, _ = computeIuy(uDivided, yDivided, 
+        IuyLinear, f, _, IuyConf, _ = computeIuy(uDivided, yDivided, 
                                       Fs, fres, beta_uy, beta_yu, Duy, Dyu, 
                                       Hnuy, Hnyu, Hnnuy, Hnnyu, f_inputMin, 
                                       f_inputMax, maxOrder=1, 
                                       ustring=ustring, ystring=ystring)
         
-        IyunLinear, f, _, _, _ = computeIuy(yDivided, uDivided, 
+        IyuLinear, f, _, IyuConf, _ = computeIuy(yDivided, uDivided, 
                                       Fs, fres, beta_yu, beta_uy, 
                                       Dyu, Duy, Hnyu, Hnuy, Hnnyu, Hnnuy,
                                       f_inputMin, f_inputMax, maxOrder=1, 
                                       ustring=ystring, ystring=ustring)
                 
-        Iuy = np.mean(Iuyn, axis=1)
-        Iyu = np.mean(Iyun, axis=1)
-        Iuu = np.mean(Iuun, axis=1)
-        Iyy = np.mean(Iyyn, axis=1)
-        IuyLinear = np.mean(IuynLinear, axis=1)
-        IyuLinear = np.mean(IyunLinear, axis=1)
-        IuyConf = np.mean(np.abs(Iuynconf), axis=1)
-        IyuConf = np.mean(np.abs(Iyunconf), axis=1)
+        
+        
         IuyConf[:] = np.quantile(IuyConf, 0.95)
         IyuConf[:] = np.quantile(IyuConf, 0.95)
         
@@ -1010,6 +1025,73 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
         
         
         
-        return Iuy, Iyu, f, Iuyn, Iyun, IuyLinear, IyuLinear, IuynLinear, IyunLinear, IuyConf, IyuConf
+        return Iuy, Iyu, f, IuyLinear, IyuLinear, IuyConf, IyuConf
 
+def PDC(u, y, Fs, fres, maxLagu, maxLagy, ustring='u', ystring='y', 
+        mfrolsEngine='python', elsEngine='python'):
+    
+        import identFunctions as ident
+        import matplotlib.pyplot as plt
+        import sympy as sym
+        
+        f = np.arange(-Fs/2, Fs/2, fres)
+        degree = 2
+        beta_uy, __, Duy = ident.identifyModel(u, y, maxLagu, maxLagy, ustring=ustring, ystring=ystring, nstring='n',
+                                               delay=1, degree=degree, L=1, constantTerm=False, val=0.01, supress=True,
+                                               method='mfrolsval', elsMethod='mols', elsMaxIter=10,
+                                               useStruct=[], mfrolsEngine='python', elsEngine='python')
+        
+        beta_yu, __, Dyu = ident.identifyModel(y, u, maxLagu, maxLagy, ustring=ystring, ystring=ustring, nstring='m',
+                                               delay=1, degree=degree, L=1, constantTerm=False, val = 0.01, supress=True,
+                                               method='mfrolsval', elsMethod='mols', elsMaxIter=10,
+                                               useStruct=[], mfrolsEngine='python', elsEngine='python')
+        
+        print(beta_uy, Duy)
+        print(beta_yu, Dyu)
+    
+      
+        Hnuy = computeSystemGFRF(Duy, Fs, beta_uy, 1,
+                                 ustring=ustring, ystring=ystring,
+                                 noiseFlag=False)
+        
+        Hnyu = computeSystemGFRF(Dyu, Fs, beta_yu, 1,
+                                 ustring=ystring, ystring=ustring,
+                                 noiseFlag=False)
+        
+        pdc_uy_values, pdc_yu_values, f, __, __, __, __ = NPDC(u, y, Fs, fres, 
+                                           beta_uy, beta_yu, 
+                                           Duy, Dyu,
+                                           Hnuy, Hnyu, f_inputMin=0, f_inputMax=Fs/2, maxOrder=degree, 
+                                           L=1, ustring='u', ystring='y', 
+                                           mfrolsEngine='python', elsEngine='python')
+        # f1 = sym.symbols('f1')
+        # n, d = sym.fraction(Hnuy[1], exact=True)
+        
+        # Auy = -n
+        # auyj = -n + d
+        # z = sym.symbols('z')
+        # auyj = auyj.subs(sym.exp(-2*sym.pi*sym.I*f1), z)
+        # terms = [[y for y in term.as_coeff_exponent(z)] for term in auyj.as_ordered_terms()]
+        # auyj = np.array([term[0] for term in terms])
+        
+        # PDCuy = Auy/sym.sqrt(np.sum(auyj**2))
+        
+        
+        # n, d = sym.fraction(Hnyu[1], exact=True)
+        
+        # Ayu = -n
+        # ayuj = -n + d
+        # ayuj = ayuj.subs(sym.exp(-2*sym.pi*sym.I*f1), z)
+        # terms = [[y for y in term.as_coeff_exponent(z)] for term in ayuj.as_ordered_terms()]
+        # ayuj = np.array([term[0] for term in terms])
+        
+        # PDCyu = Ayu/sym.sqrt(np.sum(ayuj**2))
+        
+        
+        # fun_uy = sym.lambdify(f1, PDCuy)
+        # fun_yu = sym.lambdify(f1, PDCyu)
+        
+        # pdc_uy_values = fun_uy(f)
+        # pdc_yu_values = fun_yu(f)
 
+        return pdc_uy_values, pdc_yu_values, f
