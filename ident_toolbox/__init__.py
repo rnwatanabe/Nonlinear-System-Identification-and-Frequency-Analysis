@@ -1,2 +1,2 @@
-import identFunctions
-import GFRFfunctions
+import ident_functions
+import GFRF_functions

@@ -825,7 +825,7 @@ def computeIuy(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
                                  Hnuy, Hnyu, Hnnuy, Hnnyu, f_inputMin, f_inputMax, maxOrder,
                                  ustring='u', ystring='y'):
         
-        import identFunctions as ident       
+        import ident_functions as ident       
         
         U, f = computeSignalFFT(u, Fs, fres)       
 #        Y, _ = computeSignalFFT(y, Fs, fres)
@@ -886,7 +886,7 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
          L=9, ustring='u', ystring='y', 
          mfrolsEngine='python', elsEngine='python'):
     
-        import identFunctions as ident
+        import ident_functions as ident
         import matplotlib.pyplot as plt
         
         f = np.arange(-Fs/2, Fs/2, fres)
@@ -1030,7 +1030,7 @@ def NPDC(u, y, Fs, fres, beta_uy, beta_yu, Duy, Dyu,
 def PDC(u, y, Fs, fres, maxLagu, maxLagy, ustring='u', ystring='y', 
         mfrolsEngine='python', elsEngine='python'):
     
-        import identFunctions as ident
+        import ident_functions as ident
         import matplotlib.pyplot as plt
         import sympy as sym
         
