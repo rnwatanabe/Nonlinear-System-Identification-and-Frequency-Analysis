@@ -727,7 +727,7 @@ def pNoiseMatrix(u,y,n, maxLagu, maxLagy, maxLagNoise,
     for i in range(1, degree+1):
         terms = list(combinations_with_replacement(indD.tolist(), i))
         multindD = buildMultipliedTerms(terms)
-        indToRemove = np.reshape(np.array([], dtype=np.int), (-1, 1))
+        indToRemove = np.reshape(np.array([], dtype=int), (-1, 1))
         for j in range(len(multindD)):
             if multindD[j].find(nstring) == -1:
                 indToRemove = np.vstack((indToRemove, j))
