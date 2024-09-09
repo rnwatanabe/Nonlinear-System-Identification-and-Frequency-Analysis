@@ -782,7 +782,7 @@ def reshapeyvector(y, L):
 def executeMFrols(p, y, pho, D, L=1, supress=False, mfrolsEngine='python'):
     import sys
     sys.path.insert(1, '/home/rnwatanabe/Dropbox/Nonlinear-System-Identification-and-Frequency-Analysis/')
-    import frolsfunctions
+
     import gc
     
     p, y = reshapepymatrices(p, y, L)    
@@ -821,9 +821,9 @@ def executeMFrols(p, y, pho, D, L=1, supress=False, mfrolsEngine='python'):
         M0 = 0
         qs = np.copy(p)
         
-        beta, M0 = frolsfunctions.frolsfunctions.mfrols(p, y, pho, s, ESR, l, err, 
-                                                        A, qs, g, not supress, 
-                                                        p.shape[0], M, K)
+        beta, M0 = mfrols(p, y, pho, s, ESR, l, err, 
+                          A, qs, g, not supress, 
+                          p.shape[0], M, K)
         l = l - 1
         beta = beta[0:M0,:]
 
@@ -839,7 +839,7 @@ def executeMFrols(p, y, pho, D, L=1, supress=False, mfrolsEngine='python'):
 def executeMFrolsVal(p, y, u, val, L=1, supress=False, mfrolsEngine='python'):
     import sys
     sys.path.insert(1, '/home/rnwatanabe/Dropbox/Nonlinear-System-Identification-and-Frequency-Analysis/')
-    import frolsfunctions
+   
     import gc
     
     p, y = reshapepymatrices(p, y, L)    
@@ -978,7 +978,7 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
                   pho=1e-2, supress=False, L=5, method='mfrols', 
                   elsEngine='python'):
           
-    import frolsfunctions
+    
     import gc
     
     for k in range(maxIter):
@@ -1012,6 +1012,7 @@ def elsWithStruct(u, y, n, D, maxIter=10, ustring='u',
                         betan, e_betan, _, betani = RLS(pn, y[maxLag:,:], lamb=lamb, Nmax=Nmax, 
                                                         supress=supressMessage)
                 if elsEngine == 'fortran':
+                        import frolsfunctions
                         M = pn.shape[1]
                         K = pn.shape[2]
                         betan, betani = frolsfunctions.frolsfunctions.rls(pn, y[maxLag:,:], lamb, Nmax,  
